@@ -141,12 +141,13 @@ int main(int argc, char **argv) {
 				return -1;
 			}
 
-			FILE *assembly = fopen(bin_filename, "r");
+			FILE *assembly = fopen(bin_filename, "rb");
 			if (assembly == NULL) {
 				printf("ERROR: Opening file '%s': %d\n", bin_filename, errno);
 				return -1;
 			}
 			dissassemble(assembly, stdout);
+			fclose(assembly);
 
 			remove(bin_filename);
 		} else {

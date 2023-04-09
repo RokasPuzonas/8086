@@ -6,51 +6,15 @@
 #define u16 uint16_t
 #define u8  uint8_t
 
-struct cpu_state {
-    u16 ax, bx, cx, dx, sp, bp, si, di;
-};
+const char *wide_reg_names[8]     = { "ax", "cx", "dx", "bx", "sp", "bp", "si", "di" };
+const char *non_wide_reg_names[8] = { "al", "cl", "dl", "bl", "ah", "ch", "dh", "bh" };
 
 const char *lookup_reg_name(u8 idx, bool wide) {
     if (wide) {
-        if        (idx == 0b000) {
-            return "ax";
-        } else if (idx == 0b001) {
-            return "cx";
-        } else if (idx == 0b010) {
-            return "dx";
-        } else if (idx == 0b011) {
-            return "bx";
-        } else if (idx == 0b100) {
-            return "sp";
-        } else if (idx == 0b101) {
-            return "bp";
-        } else if (idx == 0b110) {
-            return "si";
-        } else if (idx == 0b111) {
-            return "di";
-        }
+        return wide_reg_names[idx];
     } else {
-        if        (idx == 0b000) {
-            return "al";
-        } else if (idx == 0b001) {
-            return "cl";
-        } else if (idx == 0b010) {
-            return "dl";
-        } else if (idx == 0b011) {
-            return "bl";
-        } else if (idx == 0b100) {
-            return "ah";
-        } else if (idx == 0b101) {
-            return "ch";
-        } else if (idx == 0b110) {
-            return "dh";
-        } else if (idx == 0b111) {
-            return "bh";
-        }
+        return non_wide_reg_names[idx];
     }
-
-    printf("ERROR: Unknown register %d, wide %d", idx, wide);
-    abort();
 }
 
 void dissassemble(FILE *src, FILE *dst) {
@@ -59,6 +23,7 @@ void dissassemble(FILE *src, FILE *dst) {
         u8 byte1 = fgetc(src);
         u8 byte2 = fgetc(src);
 
+        // Register memory to/from register
         if ((byte1 & 0b11111100) == 0b10001000) {
             bool wide = byte1 & 0b1;
             bool direction = (byte1 & 0b10) >> 1;

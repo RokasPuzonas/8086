@@ -31,7 +31,7 @@ void dissassemble(FILE *src, FILE *dst) {
             u8 mod =  byte2 & 0b11000000;
             u8 reg = (byte2 & 0b00111000) >> 3;
             u8 rm  =  byte2 & 0b00000111;
-            if (mod == 0b11000000) {
+            if (mod == 0b11000000) { // Mod = 0b11
                 const char *reg_name = lookup_reg_name(reg, wide);
                 const char *rm_name  = lookup_reg_name(rm, wide);
                 if (direction) {
@@ -39,9 +39,9 @@ void dissassemble(FILE *src, FILE *dst) {
                 } else {
                     fprintf(dst, "mov %s, %s\n", rm_name, reg_name);
                 }
-            } else {
-                printf("ERROR: Unsupported mod '%d'", mod);
-                abort();
+            } else if (mod == 0b10000000) { // Mod = 0b10
+            } else if (mod == 0b01000000) { // Mod = 0b01
+            } else if (mod == 0b00000000) { // Mod = 0b00
             }
         }
     }

@@ -51,7 +51,7 @@ void print_usage(const char *program) {
 
 int compile_asm(const char *src, const char *dst) {
 	char command[512] = { 0 };
-	snprintf(command, sizeof(command), "nasm \"%s\" -o \"%s\"", src, dst);
+	snprintf(command, sizeof(command), "nasm \"%s\" -O0 -o \"%s\"", src, dst);
 	return system(command);
 }
 

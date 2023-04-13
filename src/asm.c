@@ -15,6 +15,8 @@
 #define dbg(...) printf("; "); printf(__VA_ARGS__); printf("\n")
 #define ARRAY_LEN(arr) sizeof(arr) / sizeof(arr[0])
 
+// TODO: find a way to merge "to/from register" with "to/from accumulator" branches into a single code path
+
 enum decode_error {
     DECODE_OK,
     DECODE_ERR_EOF,

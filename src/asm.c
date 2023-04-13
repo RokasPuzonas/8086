@@ -18,15 +18,57 @@
 enum decode_error {
     DECODE_OK,
     DECODE_ERR_EOF,
-    DECODE_ERR_MISSING_BYTES
+    DECODE_ERR_MISSING_BYTES,
+    DECODE_ERR_UNKNOWN_OP,
 };
 
 enum operation {
     OP_MOVE,
+    OP_ADD,
+    OP_SUB,
+    OP_CMP,
+    OP_JE, OP_JL, OP_JLE, OP_JB, OP_JBE,
+    OP_JP,
+    OP_JO,
+    OP_JS,
+    OP_JNE, OP_JNL, OP_JNLE, OP_JNB, OP_JNBE,
+    OP_JNP,
+    OP_JNO,
+    OP_JNS,
+    OP_LOOP,
+    OP_LOOPZ,
+    OP_LOOPNZ,
+    OP_JCXZ,
     __OP_COUNT
 };
 const char *operation_str[__OP_COUNT] = {
-    "mov"
+    "mov", "add", "sub", "cmp", "je", "jl", "jle", "jb", "jbe", "jp", "jo",
+    "js", "jne", "jnl","jnle", "jnb", "jnbe", "jnp", "jno", "jns", "loop",
+    "loopz", "loopnz", "jcxz"
+};
+const enum operation cond_jmp_lookup[16] = {
+    [0b0100] = OP_JE,
+    [0b1100] = OP_JL,
+    [0b1110] = OP_JLE,
+    [0b0010] = OP_JB,
+    [0b0110] = OP_JBE,
+    [0b1010] = OP_JP,
+    [0b0000] = OP_JO,
+    [0b1000] = OP_JS,
+    [0b0101] = OP_JNE,
+    [0b1101] = OP_JNL,
+    [0b1111] = OP_JNLE,
+    [0b0011] = OP_JNB,
+    [0b0111] = OP_JNBE,
+    [0b1011] = OP_JNP,
+    [0b0001] = OP_JNO,
+    [0b1001] = OP_JNS
+};
+const enum operation cond_loop_jmp_lookup[4] = {
+    [0b10] = OP_LOOP,
+    [0b01] = OP_LOOPZ,
+    [0b00] = OP_LOOPNZ,
+    [0b11] = OP_JCXZ
 };
 
 // Order and place of these `enum reg_value` enums is IMPORTANT! Don't rearrange!
@@ -81,8 +123,8 @@ struct reg_or_mem_value {
 enum src_value_variant {
     SRC_VALUE_REG,
     SRC_VALUE_MEM,
-    SRC_VALUE_IMMIDIATE8,
-    SRC_VALUE_IMMIDIATE16
+    SRC_VALUE_immediate8,
+    SRC_VALUE_immediate16
 };
 
 struct src_value {
@@ -90,7 +132,7 @@ struct src_value {
     union {
         enum reg_value reg;
         struct mem_value mem;
-        u16 immidiate;
+        u16 immediate;
     };
 };
 
@@ -98,6 +140,7 @@ struct instruction {
     enum operation op;
     struct reg_or_mem_value dest;
     struct src_value src;
+    i8 jmp_offset;
 };
 
 static const char *reg_to_str(enum reg_value reg) {
@@ -135,11 +178,11 @@ static void src_to_str(char *buff, size_t max_size, struct src_value *value) {
     case SRC_VALUE_MEM:
         mem_to_str(buff, max_size, &value->mem);
         break;
-    case SRC_VALUE_IMMIDIATE16:
-        snprintf(buff, max_size, "%d", value->immidiate);
+    case SRC_VALUE_immediate16:
+        snprintf(buff, max_size, "%d", value->immediate);
         break;
-    case SRC_VALUE_IMMIDIATE8:
-        snprintf(buff, max_size, "%d", (u8)value->immidiate);
+    case SRC_VALUE_immediate8:
+        snprintf(buff, max_size, "%d", (u8)value->immediate);
         break;
     }
 }
@@ -152,19 +195,52 @@ static const char *operation_to_str(enum operation op) {
 static void instruction_to_str(char *buff, size_t max_size, struct instruction *inst) {
     switch (inst->op)
     {
-    case OP_MOVE: {
-        char dest[24];
-        char src[24];
+    case OP_MOVE:
+    case OP_CMP:
+    case OP_SUB:
+    case OP_ADD: {
+        char dest[32];
+        char src[32];
+        const char *opcode = operation_to_str(inst->op);
         reg_or_mem_to_str(dest, sizeof(dest), &inst->dest);
         src_to_str(src, sizeof(src), &inst->src);
 
         bool is_dest_mem = !inst->dest.is_reg;
-        if (is_dest_mem && inst->src.variant == SRC_VALUE_IMMIDIATE16) {
-            snprintf(buff, max_size, "mov %s, word %s", dest, src);
-        } else if (is_dest_mem && inst->src.variant == SRC_VALUE_IMMIDIATE8) {
-            snprintf(buff, max_size, "mov %s, byte %s", dest, src);
+        if (is_dest_mem && inst->src.variant == SRC_VALUE_immediate16) {
+            snprintf(buff, max_size, "%s %s, word %s", opcode, dest, src);
+        } else if (is_dest_mem && inst->src.variant == SRC_VALUE_immediate8) {
+            snprintf(buff, max_size, "%s %s, byte %s", opcode, dest, src);
         } else {
-            snprintf(buff, max_size, "mov %s, %s", dest, src);
+            snprintf(buff, max_size, "%s %s, %s", opcode, dest, src);
+        }
+        break;
+    }
+    case OP_JE:
+    case OP_JL:
+    case OP_JLE:
+    case OP_JB:
+    case OP_JBE:
+    case OP_JP:
+    case OP_JO:
+    case OP_JS:
+    case OP_JNE:
+    case OP_JNL:
+    case OP_JNLE:
+    case OP_JNB:
+    case OP_JNBE:
+    case OP_JNP:
+    case OP_JNO:
+    case OP_LOOP:
+    case OP_LOOPZ:
+    case OP_LOOPNZ:
+    case OP_JCXZ:
+    case OP_JNS: {
+        const char *opcode = operation_to_str(inst->op);
+        i8 offset = inst->jmp_offset+2;
+        if (offset >= 0) {
+            snprintf(buff, max_size, "%s $+%d", opcode, offset);
+        } else {
+            snprintf(buff, max_size, "%s $%d", opcode, offset);
         }
         break;
     }
@@ -178,6 +254,22 @@ static i16 extend_sign_bit(i8 number) {
         return number | (0b11111111 << 8);
     } else {
         return number;
+    }
+}
+
+const char *decode_error_to_str(enum decode_error err) {
+    switch (err)
+    {
+    case DECODE_OK:
+        return "ok";
+    case DECODE_ERR_EOF:
+        return "EOF";
+    case DECODE_ERR_MISSING_BYTES:
+        return "Decoder expected more bytes, but hit EOF";
+    case DECODE_ERR_UNKNOWN_OP:
+        return "Unable to decode opcode from byte";
+    default:
+        return "<unknown>";
     }
 }
 
@@ -195,20 +287,20 @@ static enum mem_base decode_mem_base(u8 rm) {
 
 // Table 4-10. R/M (Register/Memory) Field Encoding
 static void decode_reg_or_mem(struct reg_or_mem_value *value, FILE *src, u8 rm, u8 mod, bool wide) {
-    if (mod == 0b11000000) { // Mod = 0b11, register
+    if (mod == 0b11) { // Mod = 0b11, register
         value->is_reg = true;
         value->reg = decode_reg(rm, wide);
-    } else if (mod == 0b10000000) { // Mod = 0b10, memory with i16 displacement
+    } else if (mod == 0b10) { // Mod = 0b10, memory with i16 displacement
         i16 displacement = fgetc(src) | (fgetc(src) << 8);
         value->is_reg = false;
         value->mem.base = decode_mem_base(rm);
         value->mem.disp = displacement;
-    } else if (mod == 0b01000000) { // Mod = 0b01, memory with i8 displacement
+    } else if (mod == 0b01) { // Mod = 0b01, memory with i8 displacement
         i8 displacement = fgetc(src);
         value->is_reg = false;
         value->mem.base = decode_mem_base(rm);
         value->mem.disp = extend_sign_bit(displacement);
-    } else if (mod == 0b00000000) { // Mod = 0b00, memory no displacement (most of the time)
+    } else if (mod == 0b00) { // Mod = 0b00, memory no displacement (most of the time)
         value->is_reg = false;
         if (rm == 0b110) { // Direct address
             u16 address = fgetc(src) | (fgetc(src) << 8);
@@ -241,15 +333,110 @@ enum decode_error decode_instruction(FILE *src, struct instruction *output) {
     u8 byte1 = fgetc(src);
     if (feof(src)) return DECODE_ERR_EOF;
 
-    output->op = OP_MOVE;
-
-    // Register memory to/from register
+    // MOVE: Register memory to/from register
     if ((byte1 & 0b11111100) == 0b10001000) {
         u8 byte2 = fgetc(src);
         bool wide = byte1 & 0b1;
         bool direction = (byte1 & 0b10) >> 1;
 
-        u8 mod =  byte2 & 0b11000000;
+        u8 mod = (byte2 & 0b11000000) >> 6;
+        u8 reg = (byte2 & 0b00111000) >> 3;
+        u8 rm  =  byte2 & 0b00000111;
+
+        output->op = OP_MOVE;
+        if (direction) {
+            output->dest.is_reg = true;
+            output->dest.reg = decode_reg(reg, wide);
+            deocde_reg_or_mem_to_src(&output->src, src, rm, mod, wide);
+        } else {
+            output->src.variant = SRC_VALUE_REG;
+            output->src.reg = decode_reg(reg, wide);
+            decode_reg_or_mem(&output->dest, src, rm, mod, wide);
+        }
+
+    // MOVE: Immediate to register
+    } else if ((byte1 & 0b11110000) == 0b10110000) {
+        bool wide = (byte1 & 0b1000) >> 3;
+        u8 reg = byte1 & 0b111;
+
+        output->op = OP_MOVE;
+        output->dest.is_reg = true;
+        output->dest.reg = decode_reg(reg, wide);
+
+        if (wide) {
+            output->src.variant = SRC_VALUE_immediate16;
+            output->src.immediate = fgetc(src) | (fgetc(src) << 8);
+        } else {
+            output->src.variant = SRC_VALUE_immediate8;
+            output->src.immediate = fgetc(src);
+        }
+
+    // MOVE: Immediate to register/memory
+    } else if ((byte1 & 0b11111110) == 0b11000110) {
+        u8 byte2 = fgetc(src);
+
+        bool wide = byte1 & 0b1;
+        u8 mod = (byte2 & 0b11000000) >> 6;
+        u8 rm  = byte2 & 0b00000111;
+
+        output->op = OP_MOVE;
+        decode_reg_or_mem(&output->dest, src, rm, mod, wide);
+
+        if (wide) {
+            output->src.variant = SRC_VALUE_immediate16;
+            output->src.immediate = fgetc(src) | (fgetc(src) << 8);
+        } else {
+            output->src.variant = SRC_VALUE_immediate8;
+            output->src.immediate = fgetc(src);
+        }
+
+    // MOVE: Memory to accumulator
+    } else if ((byte1 & 0b11111110) == 0b10100000) {
+        output->op = OP_MOVE;
+        output->dest.is_reg = true;
+        output->dest.reg = REG_AX;
+        output->src.variant = SRC_VALUE_MEM;
+        output->src.mem.base = MEM_BASE_DIRECT_ADDRESS;
+
+        bool wide = byte1 & 0b1;
+        if (wide) {
+            output->src.mem.disp = fgetc(src) | (fgetc(src) << 8);
+        } else {
+            output->src.mem.disp = fgetc(src);
+        }
+
+    // MOVE: Accumulator to memory
+    } else if ((byte1 & 0b11111110) == 0b10100010) {
+        bool wide = byte1 & 0b1;
+
+        output->op = OP_MOVE;
+        output->src.variant = SRC_VALUE_REG;
+        output->src.reg = wide ? REG_AX : REG_AL;
+        output->dest.is_reg = false;
+        output->dest.mem.base = MEM_BASE_DIRECT_ADDRESS;
+
+        if (wide) {
+            output->dest.mem.disp = fgetc(src) | (fgetc(src) << 8);
+        } else {
+            output->dest.mem.disp = fgetc(src);
+        }
+
+    // ADD/SUB/CMP: Reg/memory with register to either
+    } else if ((byte1 & 0b11000100) == 0b00000000) {
+        u8 variant = (byte1 & 0b00111000) >> 3;
+        if (variant == 0b000) {
+            output->op = OP_ADD;
+        } else if (variant == 0b101) {
+            output->op = OP_SUB;
+        } else if (variant == 0b111) {
+            output->op = OP_CMP;
+        }
+
+        bool wide      =  byte1 & 0b01;
+        bool direction = (byte1 & 0b10) >> 1;
+
+        u8 byte2 = fgetc(src);
+        u8 mod = (byte2 & 0b11000000) >> 6;
         u8 reg = (byte2 & 0b00111000) >> 3;
         u8 rm  =  byte2 & 0b00000111;
 
@@ -263,92 +450,103 @@ enum decode_error decode_instruction(FILE *src, struct instruction *output) {
             decode_reg_or_mem(&output->dest, src, rm, mod, wide);
         }
 
-    // Immediate to register
-    } else if ((byte1 & 0b11110000) == 0b10110000) {
-        bool wide = (byte1 & 0b1000) >> 3;
-        u8 reg = byte1 & 0b111;
+    // ADD/SUB/CMP: immediate with register/memory
+    } else if ((byte1 & 0b11111100) == 0b10000000) {
+        u8 byte2 = fgetc(src);
+        u8 variant = (byte2 & 0b00111000) >> 3;
 
-        output->dest.is_reg = true;
-        output->dest.reg = decode_reg(reg, wide);
-
-        if (wide) {
-            output->src.variant = SRC_VALUE_IMMIDIATE16;
-            output->src.immidiate = fgetc(src) | (fgetc(src) << 8);
-        } else {
-            output->src.variant = SRC_VALUE_IMMIDIATE8;
-            output->src.immidiate = fgetc(src);
+        if (variant == 0b000) {
+            output->op = OP_ADD;
+        } else if (variant == 0b101) {
+            output->op = OP_SUB;
+        } else if (variant == 0b111) {
+            output->op = OP_CMP;
         }
 
-    // Immediate to register/memory
-    } else if ((byte1 & 0b11111110) == 0b11000110) {
-        u8 byte2 = fgetc(src);
-
-        bool wide = byte1 & 0b1;
-        u8 mod = byte2 & 0b11000000;
+        bool wide        =  byte1 & 0b01;
+        bool sign_extend = (byte1 & 0b10) >> 1;
+        u8 mod = (byte2 & 0b11000000) >> 6;
         u8 rm  = byte2 & 0b00000111;
 
         decode_reg_or_mem(&output->dest, src, rm, mod, wide);
 
         if (wide) {
-            output->src.variant = SRC_VALUE_IMMIDIATE16;
-            output->src.immidiate = fgetc(src) | (fgetc(src) << 8);
+            output->src.variant = SRC_VALUE_immediate16;
+            if (sign_extend) {
+                output->src.immediate = fgetc(src);
+                output->src.immediate = extend_sign_bit(output->src.immediate);
+            } else {
+                output->src.immediate = fgetc(src) | (fgetc(src) << 8);
+            }
         } else {
-            output->src.variant = SRC_VALUE_IMMIDIATE8;
-            output->src.immidiate = fgetc(src);
+            output->src.variant = SRC_VALUE_immediate8;
+            output->src.immediate = fgetc(src);
         }
 
-    // Memory to accumulator
-    } else if ((byte1 & 0b11111110) == 0b10100000) {
+    // ADD/SUB/CMP: immediate with accumulator
+    } else if ((byte1 & 0b11000110) == 0b00000100) {
         bool wide = byte1 & 0b1;
 
         output->dest.is_reg = true;
-        output->dest.reg = REG_AX;
-        output->src.variant = SRC_VALUE_MEM;
-        output->src.mem.base = MEM_BASE_DIRECT_ADDRESS;
+        output->dest.reg = wide ? REG_AX : REG_AL;
 
-        if (wide) {
-            output->src.mem.disp = fgetc(src) | (fgetc(src) << 8);
-        } else {
-            output->src.mem.disp = fgetc(src);
+        u8 variant = (byte1 & 0b00111000) >> 3;
+        if (variant == 0b000) {
+            output->op = OP_ADD;
+        } else if (variant == 0b101) {
+            output->op = OP_SUB;
+        } else if (variant == 0b111) {
+            output->op = OP_CMP;
         }
 
-    // Accumulator to memory
-    } else if ((byte1 & 0b11111110) == 0b10100010) {
-        bool wide = byte1 & 0b1;
-
-        output->src.variant = SRC_VALUE_REG;
-        output->src.reg = REG_AX;
-        output->dest.is_reg = false;
-        output->dest.mem.base = MEM_BASE_DIRECT_ADDRESS;
-
         if (wide) {
-            output->dest.mem.disp = fgetc(src) | (fgetc(src) << 8);
+            output->src.variant = SRC_VALUE_immediate16;
+            output->src.immediate = fgetc(src) | (fgetc(src) << 8);
         } else {
-            output->dest.mem.disp = fgetc(src);
+            output->src.variant = SRC_VALUE_immediate8;
+            output->src.immediate = fgetc(src);
         }
+
+    // Conditional jumps
+    } else if ((byte1 & 0b11110000) == 0b01110000) {
+        i8 jmp_offset = fgetc(src);
+        u8 opcode = byte1 & 0b00001111;
+        output->op = cond_jmp_lookup[opcode];
+        output->jmp_offset = jmp_offset;
+
+    // Conditional jumps
+    } else if ((byte1 & 0b11111100) == 0b11100000) {
+        i8 jmp_offset = fgetc(src);
+        u8 opcode = byte1 & 0b00000011;
+        output->op = cond_loop_jmp_lookup[opcode];
+        output->jmp_offset = jmp_offset;
 
     } else {
-        todo("unhandled byte %d", byte1);
+        return DECODE_ERR_UNKNOWN_OP;
     }
 
     return DECODE_OK;
 }
 
-void dissassemble(FILE *src, FILE *dst) {
+int dissassemble(FILE *src, FILE *dst) {
     fprintf(dst, "bits 16\n\n");
 
-    char line[256];
+    char buff[256];
     struct instruction inst;
+    int counter = 1;
     while (true) {
         enum decode_error err = decode_instruction(src, &inst);
         if (err == DECODE_ERR_EOF) break;
         if (err != DECODE_OK) {
-            fprintf(stderr, "ERROR: Failed to decode instruction, code: %d\n", err);
-            break;
+            fprintf(stderr, "ERROR: Failed to decode %d instruction: %s\n", counter, decode_error_to_str(err));
+            return -1;
         }
 
-        instruction_to_str(line, sizeof(line), &inst);
-        fprintf(dst, line);
+        instruction_to_str(buff, sizeof(buff), &inst);
+        fprintf(dst, buff);
         fprintf(dst, "\n");
+        counter += 1;
     }
+
+    return 0;
 }

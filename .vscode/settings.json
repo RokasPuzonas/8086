@@ -6,6 +6,7 @@
         "fcntl.h": "c",
         "io.h": "c",
         "errno.h": "c",
-        "stdbool.h": "c"
+        "stdbool.h": "c",
+        "sim8086.h": "c"
     }
 }

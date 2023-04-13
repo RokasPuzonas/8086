@@ -1,19 +1,6 @@
-#include <inttypes.h>
 #include <stdio.h>
-#include <stdbool.h>
-#include <assert.h>
 
-#define u32 uint32_t
-#define i32 int32_t
-#define u16 uint16_t
-#define i16 int16_t
-#define u8  uint8_t
-#define i8  int8_t
-
-#define panic(...) fprintf(stderr, "ABORT(%s:%d): ", __FILE__, __LINE__); fprintf(stderr, __VA_ARGS__); abort()
-#define todo(...) fprintf(stderr, "TODO(%s:%d): ", __FILE__, __LINE__); fprintf(stderr, __VA_ARGS__); abort()
 #define dbg(...) printf("; "); printf(__VA_ARGS__); printf("\n")
-#define ARRAY_LEN(arr) sizeof(arr) / sizeof(arr[0])
 
 // TODO: find a way to merge "to/from register" with "to/from accumulator" branches into a single code path
 
@@ -24,30 +11,6 @@ enum decode_error {
     DECODE_ERR_UNKNOWN_OP,
 };
 
-enum operation {
-    OP_MOV,
-    OP_ADD,
-    OP_SUB,
-    OP_CMP,
-    OP_JE, OP_JL, OP_JLE, OP_JB, OP_JBE,
-    OP_JP,
-    OP_JO,
-    OP_JS,
-    OP_JNE, OP_JNL, OP_JNLE, OP_JNB, OP_JNBE,
-    OP_JNP,
-    OP_JNO,
-    OP_JNS,
-    OP_LOOP,
-    OP_LOOPZ,
-    OP_LOOPNZ,
-    OP_JCXZ,
-    __OP_COUNT
-};
-const char *operation_str[__OP_COUNT] = {
-    "mov", "add", "sub", "cmp", "je", "jl", "jle", "jb", "jbe", "jp", "jo",
-    "js", "jne", "jnl","jnle", "jnb", "jnbe", "jnp", "jno", "jns", "loop",
-    "loopz", "loopnz", "jcxz"
-};
 const enum operation cond_jmp_lookup[16] = {
     [0b0100] = OP_JE,
     [0b1100] = OP_JL,
@@ -72,184 +35,6 @@ const enum operation cond_loop_jmp_lookup[4] = {
     [0b00] = OP_LOOPNZ,
     [0b11] = OP_JCXZ
 };
-
-// Order and place of these `enum reg_value` enums is IMPORTANT! Don't rearrange!
-enum reg_value {
-    REG_AL, REG_CL, REG_DL, REG_BL, REG_AH, REG_CH, REG_DH, REG_BH,
-    REG_AX, REG_CX, REG_DX, REG_BX, REG_SP, REG_BP, REG_SI, REG_DI,
-    __REG_COUNT
-};
-const char *reg_value_str[__REG_COUNT] = {
-    "al", "cl", "dl", "bl", "ah", "ch", "dh", "bh",
-    "ax", "cx", "dx", "bx", "sp", "bp", "si", "di"
-};
-
-// Order and place of these `enum mem_base` enums is IMPORTANT! Don't rearrange!
-enum mem_base {
-    MEM_BASE_BX_SI,
-    MEM_BASE_BX_DI,
-    MEM_BASE_BP_SI,
-    MEM_BASE_BP_DI,
-    MEM_BASE_SI,
-    MEM_BASE_DI,
-    MEM_BASE_BP,
-    MEM_BASE_BX,
-    MEM_BASE_DIRECT_ADDRESS,
-    __MEM_BASE_COUNT
-};
-const char *mem_base_str[8] = {
-    "bx + si",
-    "bx + di",
-    "bp + si",
-    "bp + di",
-    "si",
-    "di",
-    "bp",
-    "bx"
-};
-
-struct mem_value {
-    enum mem_base base;
-    i16 disp;
-    // IMPORTANT! Keep in mind that `disp` should be interpreted as `u16`, if `base == MEM_BASE_DIRECT_ADDRESS`
-};
-
-struct reg_or_mem_value {
-    bool is_reg;
-    union {
-        enum reg_value reg;
-        struct mem_value mem;
-    };
-};
-
-enum src_value_variant {
-    SRC_VALUE_REG,
-    SRC_VALUE_MEM,
-    SRC_VALUE_immediate8,
-    SRC_VALUE_immediate16
-};
-
-struct src_value {
-    enum src_value_variant variant;
-    union {
-        enum reg_value reg;
-        struct mem_value mem;
-        u16 immediate;
-    };
-};
-
-struct instruction {
-    enum operation op;
-    struct reg_or_mem_value dest;
-    struct src_value src;
-    i8 jmp_offset;
-};
-
-static const char *reg_to_str(enum reg_value reg) {
-    assert(0 <= reg && reg <= __REG_COUNT);
-    return reg_value_str[reg];
-}
-
-static void mem_to_str(char *buff, size_t max_size, struct mem_value *mem) {
-    assert(0 <= mem->base && mem->base <= __MEM_BASE_COUNT);
-    if (mem->base == MEM_BASE_DIRECT_ADDRESS) {
-        snprintf(buff, max_size, "[%d]", (u16)mem->disp);
-    } else if (mem->disp > 0) {
-        snprintf(buff, max_size, "[%s + %d]", mem_base_str[mem->base], mem->disp);
-    } else if (mem->disp < 0) {
-        snprintf(buff, max_size, "[%s - %d]", mem_base_str[mem->base], -mem->disp);
-    } else {
-        snprintf(buff, max_size, "[%s]", mem_base_str[mem->base]);
-    }
-}
-
-static void reg_or_mem_to_str(char *buff, size_t max_size, struct reg_or_mem_value *value) {
-    if (value->is_reg) {
-        strncpy(buff, reg_to_str(value->reg), max_size);
-    } else {
-        mem_to_str(buff, max_size, &value->mem);
-    }
-}
-
-static void src_to_str(char *buff, size_t max_size, struct src_value *value) {
-    switch (value->variant)
-    {
-    case SRC_VALUE_REG:
-        strncpy(buff, reg_to_str(value->reg), max_size);
-        break;
-    case SRC_VALUE_MEM:
-        mem_to_str(buff, max_size, &value->mem);
-        break;
-    case SRC_VALUE_immediate16:
-        snprintf(buff, max_size, "%d", value->immediate);
-        break;
-    case SRC_VALUE_immediate8:
-        snprintf(buff, max_size, "%d", (u8)value->immediate);
-        break;
-    }
-}
-
-static const char *operation_to_str(enum operation op) {
-    assert(0 <= op && op <= __OP_COUNT);
-    return operation_str[op];
-}
-
-static void instruction_to_str(char *buff, size_t max_size, struct instruction *inst) {
-    switch (inst->op)
-    {
-    case OP_MOV:
-    case OP_CMP:
-    case OP_SUB:
-    case OP_ADD: {
-        char dest[32];
-        char src[32];
-        const char *opcode = operation_to_str(inst->op);
-        reg_or_mem_to_str(dest, sizeof(dest), &inst->dest);
-        src_to_str(src, sizeof(src), &inst->src);
-
-        bool is_dest_mem = !inst->dest.is_reg;
-        if (is_dest_mem && inst->src.variant == SRC_VALUE_immediate16) {
-            snprintf(buff, max_size, "%s %s, word %s", opcode, dest, src);
-        } else if (is_dest_mem && inst->src.variant == SRC_VALUE_immediate8) {
-            snprintf(buff, max_size, "%s %s, byte %s", opcode, dest, src);
-        } else {
-            snprintf(buff, max_size, "%s %s, %s", opcode, dest, src);
-        }
-        break;
-    }
-    case OP_JE:
-    case OP_JL:
-    case OP_JLE:
-    case OP_JB:
-    case OP_JBE:
-    case OP_JP:
-    case OP_JO:
-    case OP_JS:
-    case OP_JNE:
-    case OP_JNL:
-    case OP_JNLE:
-    case OP_JNB:
-    case OP_JNBE:
-    case OP_JNP:
-    case OP_JNO:
-    case OP_LOOP:
-    case OP_LOOPZ:
-    case OP_LOOPNZ:
-    case OP_JCXZ:
-    case OP_JNS: {
-        const char *opcode = operation_to_str(inst->op);
-        i8 offset = inst->jmp_offset+2;
-        if (offset >= 0) {
-            snprintf(buff, max_size, "%s $+%d", opcode, offset);
-        } else {
-            snprintf(buff, max_size, "%s $%d", opcode, offset);
-        }
-        break;
-    }
-    default:
-        panic("Invalid instruction opcode %d\n", inst->op);
-    }
-}
 
 static i16 extend_sign_bit(i8 number) {
     if (number & 0b10000000) {
@@ -366,10 +151,10 @@ enum decode_error decode_instruction(FILE *src, struct instruction *output) {
         output->dest.reg = decode_reg(reg, wide);
 
         if (wide) {
-            output->src.variant = SRC_VALUE_immediate16;
+            output->src.variant = SRC_VALUE_IMMEDIATE16;
             output->src.immediate = fgetc(src) | (fgetc(src) << 8);
         } else {
-            output->src.variant = SRC_VALUE_immediate8;
+            output->src.variant = SRC_VALUE_IMMEDIATE8;
             output->src.immediate = fgetc(src);
         }
 
@@ -385,10 +170,10 @@ enum decode_error decode_instruction(FILE *src, struct instruction *output) {
         decode_reg_or_mem(&output->dest, src, rm, mod, wide);
 
         if (wide) {
-            output->src.variant = SRC_VALUE_immediate16;
+            output->src.variant = SRC_VALUE_IMMEDIATE16;
             output->src.immediate = fgetc(src) | (fgetc(src) << 8);
         } else {
-            output->src.variant = SRC_VALUE_immediate8;
+            output->src.variant = SRC_VALUE_IMMEDIATE8;
             output->src.immediate = fgetc(src);
         }
 
@@ -473,7 +258,7 @@ enum decode_error decode_instruction(FILE *src, struct instruction *output) {
         decode_reg_or_mem(&output->dest, src, rm, mod, wide);
 
         if (wide) {
-            output->src.variant = SRC_VALUE_immediate16;
+            output->src.variant = SRC_VALUE_IMMEDIATE16;
             if (sign_extend) {
                 output->src.immediate = fgetc(src);
                 output->src.immediate = extend_sign_bit(output->src.immediate);
@@ -481,7 +266,7 @@ enum decode_error decode_instruction(FILE *src, struct instruction *output) {
                 output->src.immediate = fgetc(src) | (fgetc(src) << 8);
             }
         } else {
-            output->src.variant = SRC_VALUE_immediate8;
+            output->src.variant = SRC_VALUE_IMMEDIATE8;
             output->src.immediate = fgetc(src);
         }
 
@@ -502,10 +287,10 @@ enum decode_error decode_instruction(FILE *src, struct instruction *output) {
         }
 
         if (wide) {
-            output->src.variant = SRC_VALUE_immediate16;
+            output->src.variant = SRC_VALUE_IMMEDIATE16;
             output->src.immediate = fgetc(src) | (fgetc(src) << 8);
         } else {
-            output->src.variant = SRC_VALUE_immediate8;
+            output->src.variant = SRC_VALUE_IMMEDIATE8;
             output->src.immediate = fgetc(src);
         }
 
@@ -516,7 +301,7 @@ enum decode_error decode_instruction(FILE *src, struct instruction *output) {
         output->op = cond_jmp_lookup[opcode];
         output->jmp_offset = jmp_offset;
 
-    // Conditional jumps
+    // Conditional loop jumps
     } else if ((byte1 & 0b11111100) == 0b11100000) {
         i8 jmp_offset = fgetc(src);
         u8 opcode = byte1 & 0b00000011;
@@ -528,27 +313,4 @@ enum decode_error decode_instruction(FILE *src, struct instruction *output) {
     }
 
     return DECODE_OK;
-}
-
-int dissassemble(FILE *src, FILE *dst) {
-    fprintf(dst, "bits 16\n\n");
-
-    char buff[256];
-    struct instruction inst;
-    int counter = 1;
-    while (true) {
-        enum decode_error err = decode_instruction(src, &inst);
-        if (err == DECODE_ERR_EOF) break;
-        if (err != DECODE_OK) {
-            fprintf(stderr, "ERROR: Failed to decode %d instruction: %s\n", counter, decode_error_to_str(err));
-            return -1;
-        }
-
-        instruction_to_str(buff, sizeof(buff), &inst);
-        fprintf(dst, buff);
-        fprintf(dst, "\n");
-        counter += 1;
-    }
-
-    return 0;
 }

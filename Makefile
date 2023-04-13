@@ -1,11 +1,10 @@
 CC=gcc
 CFLAGS=-g -Wall
-INCLUDES=./include
 
 .DEFAULT_GOAL := main
 
 %: src/%.c
-	$(CC) -o $@ $< $(CFLAGS) -I$(INCLUDES)
+	$(CC) -o $@ $< $(CFLAGS)
 
 clean:
 	rm main.exe

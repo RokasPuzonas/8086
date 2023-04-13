@@ -25,7 +25,7 @@ enum decode_error {
 };
 
 enum operation {
-    OP_MOVE,
+    OP_MOV,
     OP_ADD,
     OP_SUB,
     OP_CMP,
@@ -197,7 +197,7 @@ static const char *operation_to_str(enum operation op) {
 static void instruction_to_str(char *buff, size_t max_size, struct instruction *inst) {
     switch (inst->op)
     {
-    case OP_MOVE:
+    case OP_MOV:
     case OP_CMP:
     case OP_SUB:
     case OP_ADD: {
@@ -345,7 +345,7 @@ enum decode_error decode_instruction(FILE *src, struct instruction *output) {
         u8 reg = (byte2 & 0b00111000) >> 3;
         u8 rm  =  byte2 & 0b00000111;
 
-        output->op = OP_MOVE;
+        output->op = OP_MOV;
         if (direction) {
             output->dest.is_reg = true;
             output->dest.reg = decode_reg(reg, wide);
@@ -361,7 +361,7 @@ enum decode_error decode_instruction(FILE *src, struct instruction *output) {
         bool wide = (byte1 & 0b1000) >> 3;
         u8 reg = byte1 & 0b111;
 
-        output->op = OP_MOVE;
+        output->op = OP_MOV;
         output->dest.is_reg = true;
         output->dest.reg = decode_reg(reg, wide);
 
@@ -381,7 +381,7 @@ enum decode_error decode_instruction(FILE *src, struct instruction *output) {
         u8 mod = (byte2 & 0b11000000) >> 6;
         u8 rm  = byte2 & 0b00000111;
 
-        output->op = OP_MOVE;
+        output->op = OP_MOV;
         decode_reg_or_mem(&output->dest, src, rm, mod, wide);
 
         if (wide) {
@@ -394,7 +394,7 @@ enum decode_error decode_instruction(FILE *src, struct instruction *output) {
 
     // MOVE: Memory to accumulator
     } else if ((byte1 & 0b11111110) == 0b10100000) {
-        output->op = OP_MOVE;
+        output->op = OP_MOV;
         output->dest.is_reg = true;
         output->dest.reg = REG_AX;
         output->src.variant = SRC_VALUE_MEM;
@@ -411,7 +411,7 @@ enum decode_error decode_instruction(FILE *src, struct instruction *output) {
     } else if ((byte1 & 0b11111110) == 0b10100010) {
         bool wide = byte1 & 0b1;
 
-        output->op = OP_MOVE;
+        output->op = OP_MOV;
         output->src.variant = SRC_VALUE_REG;
         output->src.reg = wide ? REG_AX : REG_AL;
         output->dest.is_reg = false;

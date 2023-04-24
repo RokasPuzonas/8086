@@ -129,6 +129,7 @@ int simulate(FILE *src) {
 	printf("      bp: 0x%04x (%d)\n", state.bp, state.bp);
 	printf("      si: 0x%04x (%d)\n", state.si, state.si);
 	printf("      di: 0x%04x (%d)\n", state.di, state.di);
+	printf("   flags: %s%s\n", state.flags.sign ? "S" : "", state.flags.zero ? "Z" : "");
 	return 0;
 }
 

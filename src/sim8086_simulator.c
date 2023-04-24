@@ -1,5 +1,5 @@
 
-u16 get_register_value(struct cpu_state *state, enum reg_value reg)
+u16 read_reg_value(struct cpu_state *state, enum reg_value reg)
 {
     switch (reg)
     {
@@ -23,7 +23,7 @@ u16 get_register_value(struct cpu_state *state, enum reg_value reg)
     }
 }
 
-void set_register_value(struct cpu_state *state, enum reg_value reg, u16 value)
+void write_reg_value(struct cpu_state *state, enum reg_value reg, u16 value)
 {
     switch (reg)
     {
@@ -80,26 +80,122 @@ void set_register_value(struct cpu_state *state, enum reg_value reg, u16 value)
     }
 }
 
+u16 read_src_value(struct cpu_state *state, struct src_value *src) {
+    switch (src->variant)
+    {
+        case SRC_VALUE_REG:
+            return read_reg_value(state, src->reg);
+        case SRC_VALUE_IMMEDIATE8:
+        case SRC_VALUE_IMMEDIATE16:
+            return src->immediate;
+        case SRC_VALUE_MEM:
+            todo("Handle read from memory");
+        default:
+            panic("Unhandled src variant %d\n", src->variant);
+    }
+}
+
+u16 read_src_or_mem_value(struct cpu_state *state, struct reg_or_mem_value *reg_or_mem) {
+    if (reg_or_mem->is_reg) {
+        return read_reg_value(state, reg_or_mem->reg);
+    } else {
+        todo("Handle read from memory");
+    }
+}
+void write_src_or_mem_value(struct cpu_state *state, struct reg_or_mem_value *reg_or_mem, u16 value) {
+    if (reg_or_mem->is_reg) {
+        write_reg_value(state, reg_or_mem->reg, value);
+    } else {
+        todo("Handle write to memory");
+    }
+}
+
+bool is_reg_16bit(enum reg_value reg) {
+    switch (reg)
+    {
+    case REG_AL:
+    case REG_CL:
+    case REG_DL:
+    case REG_BL:
+    case REG_AH:
+    case REG_CH:
+    case REG_DH:
+    case REG_BH:
+        return false;
+    case REG_AX:
+    case REG_CX:
+    case REG_DX:
+    case REG_BX:
+    case REG_SP:
+    case REG_BP:
+    case REG_SI:
+    case REG_DI:
+        return true;
+    default: panic("Unhandled register '%s'", reg_to_str(reg));
+    }
+}
+
+bool are_instruction_operands_16bit(struct instruction *inst) {
+    if (inst->dest.is_reg) {
+        return is_reg_16bit(inst->dest.reg);
+    } else if (inst->src.variant == SRC_VALUE_REG) {
+        return is_reg_16bit(inst->src.reg);
+    } else {
+        return inst->src.variant == SRC_VALUE_IMMEDIATE16;
+    }
+}
+
 void execute_instruction(struct cpu_state *state, struct instruction *inst) {
     switch (inst->op)
     {
-    case OP_MOV:
-        if (!inst->dest.is_reg) {
-            todo("Handle MOV to memory");
-        }
-        if (inst->src.variant == SRC_VALUE_MEM) {
-            todo("Handle MOV from memory");
-        }
-
-        u16 src_value;
-        if (inst->src.variant == SRC_VALUE_REG) {
-            src_value = get_register_value(state, inst->src.reg);
-        } else if (inst->src.variant == SRC_VALUE_IMMEDIATE8 || inst->src.variant == SRC_VALUE_IMMEDIATE16) {
-            src_value = inst->src.immediate;
-        }
-
-        set_register_value(state, inst->dest.reg, src_value);
+    case OP_MOV: {
+        u16 src_value = read_src_value(state, &inst->src);
+        write_src_or_mem_value(state, &inst->dest, src_value);
         break;
+    }
+    case OP_ADD: {
+        u16 dest_value = read_src_or_mem_value(state, &inst->dest);
+        u16 src_value = read_src_value(state, &inst->src);
+        u16 result = dest_value + src_value;
+
+        state->flags.zero = result == 0;
+        if (are_instruction_operands_16bit(inst)) {
+            state->flags.sign = (result >> 15) & 0b1;
+        } else {
+            state->flags.sign = (result >> 7) & 0b1;
+        }
+
+        write_src_or_mem_value(state, &inst->dest, result);
+        break;
+    }
+    case OP_SUB: {
+        u16 dest_value = read_src_or_mem_value(state, &inst->dest);
+        u16 src_value = read_src_value(state, &inst->src);
+        u16 result = dest_value - src_value;
+
+        state->flags.zero = result == 0;
+        if (are_instruction_operands_16bit(inst)) {
+            state->flags.sign = (result >> 15) & 0b1;
+        } else {
+            state->flags.sign = (result >> 7) & 0b1;
+        }
+
+        write_src_or_mem_value(state, &inst->dest, result);
+        break;
+    }
+    case OP_CMP: {
+        u16 dest_value = read_src_or_mem_value(state, &inst->dest);
+        u16 src_value = read_src_value(state, &inst->src);
+        u16 result = dest_value - src_value;
+
+        state->flags.zero = result == 0;
+        if (are_instruction_operands_16bit(inst)) {
+            state->flags.sign = (result >> 15) & 0b1;
+        } else {
+            state->flags.sign = (result >> 7) & 0b1;
+        }
+        break;
+    }
     default:
         todo("Unhandled instruction execution '%s'\n", operation_to_str(inst->op));
     }

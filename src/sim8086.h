@@ -110,4 +110,10 @@ struct cpu_state {
     u16 bp;
     u16 si;
     u16 di;
+
+    struct {
+        bool zero;
+        bool sign;
+        // TODO: Add all flags
+    } flags;
 };

@@ -114,6 +114,7 @@ static void deocde_reg_or_mem_to_src(struct src_value *value, FILE *src, u8 rm, 
     }
 }
 
+// TODO: change to readinf from a byte buffer
 // TODO: add handling for 'DECODE_ERR_MISSING_BYTES'
 // Handy reference: Table 4-12. 8086 Instruction Encoding
 enum decode_error decode_instruction(FILE *src, struct instruction *output) {

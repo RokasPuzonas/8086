@@ -107,7 +107,29 @@ int dissassemble(FILE *src, FILE *dst) {
 }
 
 int simulate(FILE *src) {
-	todo("simulate");
+	struct cpu_state state = { 0 };
+    struct instruction inst;
+    int counter = 1;
+    while (true) {
+        enum decode_error err = decode_instruction(src, &inst);
+        if (err == DECODE_ERR_EOF) break;
+        if (err != DECODE_OK) {
+            fprintf(stderr, "ERROR: Failed to decode %d instruction: %s\n", counter, decode_error_to_str(err));
+            return -1;
+        }
+		execute_instruction(&state, &inst);
+        counter += 1;
+    }
+
+	printf("Final registers:\n");
+	printf("      ax: 0x%04x (%d)\n", state.ax, state.ax);
+	printf("      bx: 0x%04x (%d)\n", state.bx, state.bx);
+	printf("      cx: 0x%04x (%d)\n", state.cx, state.cx);
+	printf("      sp: 0x%04x (%d)\n", state.sp, state.sp);
+	printf("      bp: 0x%04x (%d)\n", state.bp, state.bp);
+	printf("      si: 0x%04x (%d)\n", state.si, state.si);
+	printf("      di: 0x%04x (%d)\n", state.di, state.di);
+	return 0;
 }
 
 void print_usage(const char *program) {

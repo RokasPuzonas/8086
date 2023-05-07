@@ -8,6 +8,7 @@
 #include "sim8086.h"
 
 #include "sim8086.c"
+#include "sim8086_memory.c"
 #include "sim8086_decoder.c"
 #include "sim8086_simulator.c"
 
@@ -86,39 +87,51 @@ err:
 int dissassemble(FILE *src, FILE *dst) {
     fprintf(dst, "bits 16\n\n");
 
+	struct memory mem = { .mem = { 0xFF } };
+	int byte_count = load_mem_from_stream(&mem, src, 0);
+	if (byte_count == -1) {
+		fprintf(stderr, "ERROR: Failed to load file to memory\n");
+		return -1;
+	}
+
     char buff[256];
     struct instruction inst;
-    int counter = 1;
-    while (true) {
-        enum decode_error err = decode_instruction(src, &inst);
+	u32 inst_address = 0;
+    while (inst_address < byte_count) {
+        enum decode_error err = decode_instruction(&mem, &inst_address, &inst);
         if (err == DECODE_ERR_EOF) break;
         if (err != DECODE_OK) {
-            fprintf(stderr, "ERROR: Failed to decode %d instruction: %s\n", counter, decode_error_to_str(err));
+            fprintf(stderr, "ERROR: Failed to decode instruction at 0x%08x: %s\n", inst_address, decode_error_to_str(err));
             return -1;
         }
 
         instruction_to_str(buff, sizeof(buff), &inst);
         fprintf(dst, buff);
         fprintf(dst, "\n");
-        counter += 1;
     }
 
     return 0;
 }
 
 int simulate(FILE *src) {
+	struct memory mem;
+	int byte_count = load_mem_from_stream(&mem, src, 0);
+	if (byte_count == -1) {
+		fprintf(stderr, "ERROR: Failed to load file to memory\n");
+		return -1;
+	}
+
 	struct cpu_state state = { 0 };
     struct instruction inst;
-    int counter = 1;
-    while (true) {
-        enum decode_error err = decode_instruction(src, &inst);
+    u32 inst_address = 0;
+    while (inst_address < byte_count) {
+        enum decode_error err = decode_instruction(&mem, &inst_address, &inst);
         if (err == DECODE_ERR_EOF) break;
         if (err != DECODE_OK) {
-            fprintf(stderr, "ERROR: Failed to decode %d instruction: %s\n", counter, decode_error_to_str(err));
+            fprintf(stderr, "ERROR: Failed to decode instruction at 0x%08x: %s\n", inst_address, decode_error_to_str(err));
             return -1;
         }
 		execute_instruction(&state, &inst);
-        counter += 1;
     }
 
 	printf("Final registers:\n");
@@ -134,7 +147,7 @@ int simulate(FILE *src) {
 }
 
 void print_usage(const char *program) {
-	fprintf(stderr, "Usage: %s <test-dump|dump|run> <file>\n", program);
+	fprintf(stderr, "Usage: %s <test-dump|dump|sim> <file>\n", program);
 }
 
 int test_decoder(const char *asm_file) {
@@ -257,7 +270,7 @@ int main(int argc, char **argv) {
 	} else if (strequal(argv[1], "dump")) {
 		return dump_decompilation(argv[2]);
 
-	} else if (strequal(argv[1], "run")) {
+	} else if (strequal(argv[1], "sim")) {
 		return run_simulation(argv[2]);
 
 	} else {

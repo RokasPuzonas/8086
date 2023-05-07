@@ -11,7 +11,8 @@
 
 #define panic(...) fprintf(stderr, "PANIC(%s:%d): ", __FILE__, __LINE__); fprintf(stderr, __VA_ARGS__); abort()
 #define todo(...) fprintf(stderr, "TODO(%s:%d): ", __FILE__, __LINE__); fprintf(stderr, __VA_ARGS__); abort()
-#define ARRAY_LEN(arr) sizeof(arr) / sizeof(arr[0])
+#define ARRAY_LEN(arr) (sizeof(arr) / sizeof(arr[0]))
+#define MEMORY_SIZE (1024 * 1024) // 1 MiB
 
 enum operation {
     OP_MOV,
@@ -99,6 +100,10 @@ struct instruction {
     struct reg_or_mem_value dest;
     struct src_value src;
     i8 jmp_offset;
+};
+
+struct memory {
+    u8 mem[MEMORY_SIZE];
 };
 
 struct cpu_state {

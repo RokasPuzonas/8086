@@ -10,3 +10,9 @@ Important pages in manual:
 * Instruction structures - 163
 * Memory addressing - 83
 * Clocks per instruction - 66
+
+Reference emulators:
+* https://yassinebridi.github.io/asm-docs/
+* https://yjdoc2.github.io/8086-emulator-web/
+* https://carlosrafaelgn.com.br/Asm86/
+* https://idrist11.github.io/8086-Online-IDE/app.html

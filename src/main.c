@@ -12,6 +12,8 @@
 #include "sim8086_decoder.c"
 #include "sim8086_simulator.c"
 
+// TODO: refactor cli commands, there is a lot of repeating code for reading assemblies and compiling them.
+
 #define strequal(a, b) strcmp(a, b) == 0
 
 const char *get_tmp_dir() {
@@ -146,12 +148,44 @@ int simulate(FILE *src, struct memory *mem) {
 	return 0;
 }
 
+int estimate_clocks(FILE *src) {
+	struct memory mem = { 0 };
+	int byte_count = load_mem_from_stream(&mem, src, 0);
+	if (byte_count == -1) {
+		fprintf(stderr, "ERROR: Failed to load file to memory\n");
+		return -1;
+	}
+
+	u32 total_clocks = 0;
+	char buff[256];
+	struct cpu_state state = { 0 };
+    struct instruction inst;
+    while (state.ip < byte_count) {
+        enum decode_error err = decode_instruction(&mem, &state.ip, &inst);
+        if (err == DECODE_ERR_EOF) break;
+        if (err != DECODE_OK) {
+            fprintf(stderr, "ERROR: Failed to decode instruction at 0x%08x: %s\n", state.ip, decode_error_to_str(err));
+            return -1;
+        }
+
+		execute_instruction(&mem, &state, &inst);
+
+		u32 clocks = estimate_instruction_clocks(&inst);
+		total_clocks += clocks;
+		instruction_to_str(buff, sizeof(buff), &inst);
+        printf("%s ; Clocks = %d (+%d)\n", buff, total_clocks, clocks);
+    }
+
+	return 0;
+}
+
 void print_usage(const char *program) {
-	fprintf(stderr, "Usage: %s <test-dump|dump|sim|sim-dump> ...\n", program);
+	fprintf(stderr, "Usage: %s <command> ...\n", program);
 	fprintf(stderr, "\ttest-dump <file.asm> - disassemble and test output\n");
 	fprintf(stderr, "\tdump <file> - disassemble\n");
 	fprintf(stderr, "\tsim <file> - simulate program\n");
 	fprintf(stderr, "\tsim-dump <file> <output> - simulate program and dump memory to file\n");
+	fprintf(stderr, "\tclocks <file> - output estimation of clocks\n");
 }
 
 int test_decoder(const char *asm_file) {
@@ -286,6 +320,33 @@ int run_simulation_and_dump(const char *input, char const *output) {
 	return fclose(output_file);
 }
 
+int run_estimate_clocks(const char *input) {
+	if (strendswith(input, ".asm")) {
+		char bin_filename[MAX_PATH_SIZE];
+		get_tmp_file(bin_filename, "nasm_output");
+
+		if (compile_asm(input, bin_filename)) {
+			printf("ERROR: Failed to compile '%s'", input);
+			return -1;
+		}
+
+		FILE *assembly = fopen(bin_filename, "rb");
+		if (assembly == NULL) {
+			printf("ERROR: Opening file '%s': %d\n", bin_filename, errno);
+			remove(bin_filename);
+			return -1;
+		}
+		estimate_clocks(assembly);
+		fclose(assembly);
+
+		remove(bin_filename);
+	} else {
+		return -1;
+	}
+
+	return 0;
+}
+
 int main(int argc, char **argv) {
 	if (argc <= 2) {
 		print_usage(argv[0]);
@@ -303,6 +364,9 @@ int main(int argc, char **argv) {
 
 	} else if (strequal(argv[1], "sim-dump") && argc == 4) {
 		return run_simulation_and_dump(argv[2], argv[3]);
+
+	} else if (strequal(argv[1], "clocks") && argc == 3) {
+		return run_estimate_clocks(argv[2]);
 
 	} else {
 		print_usage(argv[0]);

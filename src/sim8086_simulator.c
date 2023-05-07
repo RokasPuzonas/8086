@@ -244,3 +244,82 @@ void execute_instruction(struct memory *mem, struct cpu_state *cpu, struct instr
         todo("Unhandled instruction execution '%s'\n", operation_to_str(inst->op));
     }
 }
+
+int estimate_ea_clocks(struct mem_value *value) {
+    bool has_disp = value->disp != 0;
+    switch (value->base)
+    {
+    case MEM_BASE_DIRECT_ADDRESS:
+        return 6;
+    case MEM_BASE_SI:
+    case MEM_BASE_DI:
+    case MEM_BASE_BP:
+    case MEM_BASE_BX:
+        return 5 + (has_disp ? 4 : 0);
+    case MEM_BASE_BP_DI:
+    case MEM_BASE_BX_SI:
+        return 7 + (has_disp ? 4 : 0);
+    case MEM_BASE_BX_DI:
+    case MEM_BASE_BP_SI:
+        return 8 + (has_disp ? 4 : 0);
+    default:
+        panic("Unhandled EA clocks estimation case '%d'\n", value->base);
+    }
+}
+
+u32 estimate_instruction_clocks(struct instruction *inst) {
+    switch (inst->op) {
+    case OP_MOV: {
+        bool is_src_memory = inst->src.variant == SRC_VALUE_MEM;
+        bool is_dest_memory = !inst->dest.is_reg;
+        bool is_src_accumulator  = inst->src.variant == SRC_VALUE_REG && inst->src.reg == REG_AX;
+        bool is_dest_accumulator = inst->dest.is_reg && inst->dest.reg == REG_AX;
+        bool is_src_reg = inst->src.variant == SRC_VALUE_REG;
+        bool is_dest_reg = inst->dest.is_reg;
+        bool is_src_immediate = inst->src.variant == SRC_VALUE_IMMEDIATE8 || inst->src.variant == SRC_VALUE_IMMEDIATE16;
+
+        if ((is_src_accumulator && is_dest_memory) || (is_dest_accumulator && is_src_memory)) {
+            return 10;
+        } else if (is_src_reg && is_dest_reg) {
+            return 2;
+        } else if (is_dest_reg && is_src_memory) {
+            return 8 + estimate_ea_clocks(&inst->src.mem);
+        } else if (is_dest_memory && is_src_reg) {
+            return 9 + estimate_ea_clocks(&inst->dest.mem);
+        } else if (is_dest_reg && is_src_immediate) {
+            return 4;
+        } else if (is_dest_memory && is_src_immediate) {
+            return 10 + estimate_ea_clocks(&inst->dest.mem);
+        }
+
+        break;
+    }
+    case OP_ADD: {
+        bool is_src_memory = inst->src.variant == SRC_VALUE_MEM;
+        bool is_dest_memory = !inst->dest.is_reg;
+        bool is_src_reg = inst->src.variant == SRC_VALUE_REG;
+        bool is_dest_reg = inst->dest.is_reg;
+        bool is_dest_accumulator = inst->dest.is_reg && inst->dest.reg == REG_AX;
+        bool is_src_immediate = inst->src.variant == SRC_VALUE_IMMEDIATE8 || inst->src.variant == SRC_VALUE_IMMEDIATE16;
+
+        if (is_src_reg && is_dest_reg) {
+            return 3;
+        } else if (is_dest_reg && is_src_memory) {
+            return 9 + estimate_ea_clocks(&inst->src.mem);
+        } else if (is_dest_memory && is_src_reg) {
+            return 16 + estimate_ea_clocks(&inst->dest.mem);
+        } else if (is_dest_reg && is_src_immediate) {
+            return 4;
+        } else if (is_dest_memory && is_src_immediate) {
+            return 17 + estimate_ea_clocks(&inst->dest.mem);
+        } else if (is_dest_accumulator && is_src_immediate) {
+            return 4;
+        }
+
+        break;
+    } default:
+        todo("Unhandled instruction estimation '%s'\n", operation_to_str(inst->op));
+    }
+
+    todo("Unhandled estimation variant '%s'\n", operation_to_str(inst->op));
+}

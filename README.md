@@ -9,3 +9,4 @@ Important pages in manual:
 * Registers - 24
 * Instruction structures - 163
 * Memory addressing - 83
+* Clocks per instruction - 66

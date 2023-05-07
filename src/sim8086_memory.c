@@ -25,12 +25,31 @@ int load_mem_from_file(struct memory *mem, const char *filename, u32 start) {
 }
 
 // TODO: Make this error some kind of error, when reading past end
-u8 read_byte_at(struct memory *mem, u16 address) {
+u8 read_u8_at(struct memory *mem, u16 address) {
     return mem->mem[address % MEMORY_SIZE];
 }
 
-u8 pull_byte_at(struct memory *mem, u16 *address) {
-    u8 byte = read_byte_at(mem, *address);
+u16 read_u16_at(struct memory *mem, u16 address) {
+    return read_u8_at(mem, address) | (read_u8_at(mem, address+1) << 8);
+}
+
+void write_u8_at(struct memory *mem, u16 address, u8 value) {
+    mem->mem[address % MEMORY_SIZE] = value;
+}
+
+void write_u16_at(struct memory *mem, u16 address, u16 value) {
+    write_u8_at(mem, address+0, (value >> 0) & 0xFF);
+    write_u8_at(mem, address+1, (value >> 8) & 0xFF);
+}
+
+u16 pull_u16_at(struct memory *mem, u16 *address) {
+    u16 value = read_u16_at(mem, *address);
+    (*address) += 2;
+    return value;
+}
+
+u8 pull_u8_at(struct memory *mem, u16 *address) {
+    u8 byte = read_u8_at(mem, *address);
     (*address)++;
     return byte;
 }

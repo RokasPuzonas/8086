@@ -130,13 +130,14 @@ int simulate(FILE *src) {
             fprintf(stderr, "ERROR: Failed to decode instruction at 0x%08x: %s\n", state.ip, decode_error_to_str(err));
             return -1;
         }
-		execute_instruction(&state, &inst);
+		execute_instruction(&mem, &state, &inst);
     }
 
 	printf("Final registers:\n");
 	printf("      ax: 0x%04x (%d)\n", state.ax, state.ax);
 	printf("      bx: 0x%04x (%d)\n", state.bx, state.bx);
 	printf("      cx: 0x%04x (%d)\n", state.cx, state.cx);
+	printf("      dx: 0x%04x (%d)\n", state.dx, state.dx);
 	printf("      sp: 0x%04x (%d)\n", state.sp, state.sp);
 	printf("      bp: 0x%04x (%d)\n", state.bp, state.bp);
 	printf("      si: 0x%04x (%d)\n", state.si, state.si);

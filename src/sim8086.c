@@ -42,8 +42,7 @@ static void reg_or_mem_to_str(char *buff, size_t max_size, struct reg_or_mem_val
 }
 
 static void src_to_str(char *buff, size_t max_size, struct src_value *value) {
-    switch (value->variant)
-    {
+    switch (value->variant) {
     case SRC_VALUE_REG:
         strncpy(buff, reg_to_str(value->reg), max_size);
         break;
@@ -71,8 +70,7 @@ static const char *operation_to_str(enum operation op) {
 }
 
 static void instruction_to_str(char *buff, size_t max_size, struct instruction *inst) {
-    switch (inst->op)
-    {
+    switch (inst->op) {
     case OP_MOV:
     case OP_CMP:
     case OP_SUB:

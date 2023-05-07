@@ -43,8 +43,7 @@ static i16 extend_sign_bit(i8 number) {
 }
 
 const char *decode_error_to_str(enum decode_error err) {
-    switch (err)
-    {
+    switch (err) {
     case DECODE_OK:
         return "ok";
     case DECODE_ERR_EOF:
@@ -83,19 +82,19 @@ static void decode_reg_or_mem(
         value->is_reg = true;
         value->reg = decode_reg(rm, wide);
     } else if (mod == 0b10) { // Mod = 0b10, memory with i16 displacement
-        i16 displacement = pull_byte_at(mem, addr) | (pull_byte_at(mem, addr) << 8);
+        i16 displacement = pull_u16_at(mem, addr);
         value->is_reg = false;
         value->mem.base = decode_mem_base(rm);
         value->mem.disp = displacement;
     } else if (mod == 0b01) { // Mod = 0b01, memory with i8 displacement
-        i8 displacement = pull_byte_at(mem, addr);
+        i8 displacement = pull_u8_at(mem, addr);
         value->is_reg = false;
         value->mem.base = decode_mem_base(rm);
         value->mem.disp = extend_sign_bit(displacement);
     } else if (mod == 0b00) { // Mod = 0b00, memory no displacement (most of the time)
         value->is_reg = false;
         if (rm == 0b110) { // Direct address
-            u16 address = pull_byte_at(mem, addr) | (pull_byte_at(mem, addr) << 8);
+            u16 address = pull_u16_at(mem, addr);
             value->mem.base = MEM_BASE_DIRECT_ADDRESS;
             value->mem.disp = address;
         } else {
@@ -130,11 +129,11 @@ static void deocde_reg_or_mem_to_src(
 // TODO: add handling for 'DECODE_ERR_MISSING_BYTES'
 // Handy reference: Table 4-12. 8086 Instruction Encoding
 enum decode_error decode_instruction(struct memory *mem, u16 *addr, struct instruction *output) {
-    u8 byte1 = pull_byte_at(mem, addr);
+    u8 byte1 = pull_u8_at(mem, addr);
 
     // MOVE: Register memory to/from register
     if ((byte1 & 0b11111100) == 0b10001000) {
-        u8 byte2 = pull_byte_at(mem, addr);
+        u8 byte2 = pull_u8_at(mem, addr);
         bool wide = byte1 & 0b1;
         bool direction = (byte1 & 0b10) >> 1;
 
@@ -164,16 +163,16 @@ enum decode_error decode_instruction(struct memory *mem, u16 *addr, struct instr
 
         if (wide) {
             output->src.variant = SRC_VALUE_IMMEDIATE16;
-            output->src.immediate = pull_byte_at(mem, addr) | (pull_byte_at(mem, addr) << 8);
+            output->src.immediate = pull_u16_at(mem, addr);
         } else {
             output->src.variant = SRC_VALUE_IMMEDIATE8;
-            output->src.immediate = pull_byte_at(mem, addr);
+            output->src.immediate = pull_u8_at(mem, addr);
         }
 
 
     // MOVE: Immediate to register/memory
     } else if ((byte1 & 0b11111110) == 0b11000110) {
-        u8 byte2 = pull_byte_at(mem, addr);
+        u8 byte2 = pull_u8_at(mem, addr);
 
         bool wide = byte1 & 0b1;
         u8 mod = (byte2 & 0b11000000) >> 6;
@@ -184,10 +183,10 @@ enum decode_error decode_instruction(struct memory *mem, u16 *addr, struct instr
 
         if (wide) {
             output->src.variant = SRC_VALUE_IMMEDIATE16;
-            output->src.immediate = pull_byte_at(mem, addr) | (pull_byte_at(mem, addr) << 8);
+            output->src.immediate = pull_u16_at(mem, addr);
         } else {
             output->src.variant = SRC_VALUE_IMMEDIATE8;
-            output->src.immediate = pull_byte_at(mem, addr);
+            output->src.immediate = pull_u8_at(mem, addr);
         }
 
     // MOVE: Memory to accumulator
@@ -200,9 +199,9 @@ enum decode_error decode_instruction(struct memory *mem, u16 *addr, struct instr
 
         bool wide = byte1 & 0b1;
         if (wide) {
-            output->src.mem.disp = pull_byte_at(mem, addr) | (pull_byte_at(mem, addr) << 8);
+            output->src.mem.disp = pull_u16_at(mem, addr);
         } else {
-            output->src.mem.disp = pull_byte_at(mem, addr);
+            output->src.mem.disp = pull_u8_at(mem, addr);
         }
 
     // MOVE: Accumulator to memory
@@ -216,9 +215,9 @@ enum decode_error decode_instruction(struct memory *mem, u16 *addr, struct instr
         output->dest.mem.base = MEM_BASE_DIRECT_ADDRESS;
 
         if (wide) {
-            output->dest.mem.disp = pull_byte_at(mem, addr) | (pull_byte_at(mem, addr) << 8);
+            output->dest.mem.disp = pull_u16_at(mem, addr);
         } else {
-            output->dest.mem.disp = pull_byte_at(mem, addr);
+            output->dest.mem.disp = pull_u8_at(mem, addr);
         }
 
     // ADD/SUB/CMP: Reg/memory with register to either
@@ -235,7 +234,7 @@ enum decode_error decode_instruction(struct memory *mem, u16 *addr, struct instr
         bool wide      =  byte1 & 0b01;
         bool direction = (byte1 & 0b10) >> 1;
 
-        u8 byte2 = pull_byte_at(mem, addr);
+        u8 byte2 = pull_u8_at(mem, addr);
         u8 mod = (byte2 & 0b11000000) >> 6;
         u8 reg = (byte2 & 0b00111000) >> 3;
         u8 rm  =  byte2 & 0b00000111;
@@ -252,7 +251,7 @@ enum decode_error decode_instruction(struct memory *mem, u16 *addr, struct instr
 
     // ADD/SUB/CMP: immediate with register/memory
     } else if ((byte1 & 0b11111100) == 0b10000000) {
-        u8 byte2 = pull_byte_at(mem, addr);
+        u8 byte2 = pull_u8_at(mem, addr);
         u8 variant = (byte2 & 0b00111000) >> 3;
 
         if (variant == 0b000) {
@@ -273,14 +272,14 @@ enum decode_error decode_instruction(struct memory *mem, u16 *addr, struct instr
         if (wide) {
             output->src.variant = SRC_VALUE_IMMEDIATE16;
             if (sign_extend) {
-                output->src.immediate = pull_byte_at(mem, addr);
+                output->src.immediate = pull_u8_at(mem, addr);
                 output->src.immediate = extend_sign_bit(output->src.immediate);
             } else {
-                output->src.immediate = pull_byte_at(mem, addr) | (pull_byte_at(mem, addr) << 8);
+                output->src.immediate = pull_u16_at(mem, addr);
             }
         } else {
             output->src.variant = SRC_VALUE_IMMEDIATE8;
-            output->src.immediate = pull_byte_at(mem, addr);
+            output->src.immediate = pull_u8_at(mem, addr);
         }
 
     // ADD/SUB/CMP: immediate with accumulator
@@ -301,22 +300,22 @@ enum decode_error decode_instruction(struct memory *mem, u16 *addr, struct instr
 
         if (wide) {
             output->src.variant = SRC_VALUE_IMMEDIATE16;
-            output->src.immediate = pull_byte_at(mem, addr) | (pull_byte_at(mem, addr) << 8);
+            output->src.immediate = pull_u16_at(mem, addr);
         } else {
             output->src.variant = SRC_VALUE_IMMEDIATE8;
-            output->src.immediate = pull_byte_at(mem, addr);
+            output->src.immediate = pull_u8_at(mem, addr);
         }
 
     // Conditional jumps
     } else if ((byte1 & 0b11110000) == 0b01110000) {
-        i8 jmp_offset = pull_byte_at(mem, addr);
+        i8 jmp_offset = pull_u8_at(mem, addr);
         u8 opcode = byte1 & 0b00001111;
         output->op = cond_jmp_lookup[opcode];
         output->jmp_offset = jmp_offset;
 
     // Conditional loop jumps
     } else if ((byte1 & 0b11111100) == 0b11100000) {
-        i8 jmp_offset = pull_byte_at(mem, addr);
+        i8 jmp_offset = pull_u8_at(mem, addr);
         u8 opcode = byte1 & 0b00000011;
         output->op = cond_loop_jmp_lookup[opcode];
         output->jmp_offset = jmp_offset;

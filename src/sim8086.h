@@ -95,6 +95,7 @@ struct src_value {
     };
 };
 
+// TODO: Store "wide" flag on instruction, it is useful to know when doing most operations
 struct instruction {
     enum operation op;
     struct reg_or_mem_value dest;

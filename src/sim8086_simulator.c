@@ -1,118 +1,153 @@
 
-u16 read_reg_value(struct cpu_state *state, enum reg_value reg)
+u16 read_reg_value(struct cpu_state *cpu, enum reg_value reg)
 {
-    switch (reg)
-    {
-    case REG_AL: return state->ax & 0xFF;
-    case REG_CL: return state->cx & 0xFF;
-    case REG_DL: return state->dx & 0xFF;
-    case REG_BL: return state->bx & 0xFF;
-    case REG_AH: return (state->ax >> 8) & 0xFF;
-    case REG_CH: return (state->cx >> 8) & 0xFF;
-    case REG_DH: return (state->dx >> 8) & 0xFF;
-    case REG_BH: return (state->bx >> 8) & 0xFF;
-    case REG_AX: return state->ax;
-    case REG_CX: return state->cx;
-    case REG_DX: return state->dx;
-    case REG_BX: return state->bx;
-    case REG_SP: return state->sp;
-    case REG_BP: return state->bp;
-    case REG_SI: return state->si;
-    case REG_DI: return state->di;
+    switch (reg) {
+    case REG_AL: return cpu->ax & 0xFF;
+    case REG_CL: return cpu->cx & 0xFF;
+    case REG_DL: return cpu->dx & 0xFF;
+    case REG_BL: return cpu->bx & 0xFF;
+    case REG_AH: return (cpu->ax >> 8) & 0xFF;
+    case REG_CH: return (cpu->cx >> 8) & 0xFF;
+    case REG_DH: return (cpu->dx >> 8) & 0xFF;
+    case REG_BH: return (cpu->bx >> 8) & 0xFF;
+    case REG_AX: return cpu->ax;
+    case REG_CX: return cpu->cx;
+    case REG_DX: return cpu->dx;
+    case REG_BX: return cpu->bx;
+    case REG_SP: return cpu->sp;
+    case REG_BP: return cpu->bp;
+    case REG_SI: return cpu->si;
+    case REG_DI: return cpu->di;
     default: panic("Unhandled register '%s'", reg_to_str(reg));
     }
 }
 
-void write_reg_value(struct cpu_state *state, enum reg_value reg, u16 value)
+void write_reg_value(struct cpu_state *cpu, enum reg_value reg, u16 value)
 {
-    switch (reg)
-    {
+    switch (reg) {
     case REG_AL:
-        state->ax = (state->ax & 0xFF00) & value;
+        cpu->ax = (cpu->ax & 0xFF00) & value;
         break;
     case REG_CL:
-        state->cx = (state->cx & 0xFF00) & value;
+        cpu->cx = (cpu->cx & 0xFF00) & value;
         break;
     case REG_DL:
-        state->dx = (state->dx & 0xFF00) & value;
+        cpu->dx = (cpu->dx & 0xFF00) & value;
         break;
     case REG_BL:
-        state->bx = (state->bx & 0xFF00) & value;
+        cpu->bx = (cpu->bx & 0xFF00) & value;
         break;
     case REG_AH:
-        state->ax = (state->ax & 0x00FF) & (value << 8);
+        cpu->ax = (cpu->ax & 0x00FF) & (value << 8);
         break;
     case REG_CH:
-        state->cx = (state->cx & 0x00FF) & (value << 8);
+        cpu->cx = (cpu->cx & 0x00FF) & (value << 8);
         break;
     case REG_DH:
-        state->dx = (state->dx & 0x00FF) & (value << 8);
+        cpu->dx = (cpu->dx & 0x00FF) & (value << 8);
         break;
     case REG_BH:
-        state->bx = (state->bx & 0x00FF) & (value << 8);
+        cpu->bx = (cpu->bx & 0x00FF) & (value << 8);
         break;
     case REG_AX:
-        state->ax = value;
+        cpu->ax = value;
         break;
     case REG_CX:
-        state->cx = value;
+        cpu->cx = value;
         break;
     case REG_DX:
-        state->dx = value;
+        cpu->dx = value;
         break;
     case REG_BX:
-        state->bx = value;
+        cpu->bx = value;
         break;
     case REG_SP:
-        state->sp = value;
+        cpu->sp = value;
         break;
     case REG_BP:
-        state->bp = value;
+        cpu->bp = value;
         break;
     case REG_SI:
-        state->si = value;
+        cpu->si = value;
         break;
     case REG_DI:
-        state->di = value;
+        cpu->di = value;
         break;
     default:
         panic("Unhandled register '%s'", reg_to_str(reg));
     }
 }
 
-u16 read_src_value(struct cpu_state *state, struct src_value *src) {
-    switch (src->variant)
-    {
+u16 read_mem_base_value(struct cpu_state *cpu, enum mem_base base) {
+    switch (base) {
+    case MEM_BASE_BX_SI: return read_reg_value(cpu, REG_BX) + read_reg_value(cpu, REG_SI);
+    case MEM_BASE_BX_DI: return read_reg_value(cpu, REG_BX) + read_reg_value(cpu, REG_DI);
+    case MEM_BASE_BP_SI: return read_reg_value(cpu, REG_BP) + read_reg_value(cpu, REG_SI);
+    case MEM_BASE_BP_DI: return read_reg_value(cpu, REG_BP) + read_reg_value(cpu, REG_DI);
+    case MEM_BASE_SI:    return read_reg_value(cpu, REG_SI);
+    case MEM_BASE_DI:    return read_reg_value(cpu, REG_DI);
+    case MEM_BASE_BP:    return read_reg_value(cpu, REG_BP);
+    case MEM_BASE_BX:    return read_reg_value(cpu, REG_BX);
+    default: return 0;
+    }
+}
+
+u16 calculate_mem_address(struct cpu_state *cpu, struct mem_value *addr) {
+    if (addr->base == MEM_BASE_DIRECT_ADDRESS) {
+        return addr->direct_address;
+    } else {
+        return read_mem_base_value(cpu, addr->base) + addr->disp;
+    }
+}
+
+u16 read_mem_value(struct memory *mem, struct cpu_state *cpu, struct mem_value *value, bool wide) {
+    u16 addr = calculate_mem_address(cpu, value);
+
+    return wide ? read_u16_at(mem, addr) : read_u8_at(mem, addr);
+}
+
+void write_mem_value(struct memory *mem, struct cpu_state *cpu, struct mem_value *location, u16 value, bool wide) {
+    u16 addr = calculate_mem_address(cpu, location);
+
+    if (wide) {
+        write_u16_at(mem, addr, value);
+    } else {
+        write_u8_at(mem, addr, value);
+    }
+}
+
+u16 read_src_value(struct memory *mem, struct cpu_state *cpu, struct src_value *src, bool wide) {
+    switch (src->variant) {
         case SRC_VALUE_REG:
-            return read_reg_value(state, src->reg);
+            return read_reg_value(cpu, src->reg);
         case SRC_VALUE_IMMEDIATE8:
         case SRC_VALUE_IMMEDIATE16:
             return src->immediate;
         case SRC_VALUE_MEM:
-            todo("Handle read from memory");
+            return read_mem_value(mem, cpu, &src->mem, wide);
         default:
             panic("Unhandled src variant %d\n", src->variant);
     }
 }
 
-u16 read_src_or_mem_value(struct cpu_state *state, struct reg_or_mem_value *reg_or_mem) {
+u16 read_reg_or_mem_value(struct memory *mem, struct cpu_state *cpu, struct reg_or_mem_value *reg_or_mem, bool wide) {
     if (reg_or_mem->is_reg) {
-        return read_reg_value(state, reg_or_mem->reg);
+        return read_reg_value(cpu, reg_or_mem->reg);
     } else {
-        todo("Handle read from memory");
+        return read_mem_value(mem, cpu, &reg_or_mem->mem, wide);
     }
 }
-void write_src_or_mem_value(struct cpu_state *state, struct reg_or_mem_value *reg_or_mem, u16 value) {
+
+void write_reg_or_mem_value(struct memory *mem, struct cpu_state *cpu, struct reg_or_mem_value *reg_or_mem, u16 value, bool wide) {
     if (reg_or_mem->is_reg) {
-        write_reg_value(state, reg_or_mem->reg, value);
+        write_reg_value(cpu, reg_or_mem->reg, value);
     } else {
-        todo("Handle write to memory");
+        write_mem_value(mem, cpu, &reg_or_mem->mem, value, wide);
     }
 }
 
 bool is_reg_16bit(enum reg_value reg) {
-    switch (reg)
-    {
+    switch (reg) {
     case REG_AL:
     case REG_CL:
     case REG_DL:
@@ -140,66 +175,68 @@ bool are_instruction_operands_16bit(struct instruction *inst) {
         return is_reg_16bit(inst->dest.reg);
     } else if (inst->src.variant == SRC_VALUE_REG) {
         return is_reg_16bit(inst->src.reg);
+    } else if (inst->src.variant == SRC_VALUE_IMMEDIATE8) {
+        return false;
+    } else if (inst->src.variant == SRC_VALUE_IMMEDIATE16) {
+        return true;
     } else {
-        return inst->src.variant == SRC_VALUE_IMMEDIATE16;
+        panic("Failed to determine instruction width\n");
     }
 }
 
-void execute_instruction(struct cpu_state *state, struct instruction *inst) {
-    switch (inst->op)
-    {
+void update_sign_flag(struct cpu_state *cpu, struct instruction *inst, u16 result) {
+    if (are_instruction_operands_16bit(inst)) {
+        cpu->flags.sign = (result >> 15) & 0b1;
+    } else {
+        cpu->flags.sign = (result >> 7) & 0b1;
+    }
+}
+
+void execute_instruction(struct memory *mem, struct cpu_state *cpu, struct instruction *inst) {
+    switch (inst->op) {
     case OP_MOV: {
-        u16 src_value = read_src_value(state, &inst->src);
-        write_src_or_mem_value(state, &inst->dest, src_value);
+        bool wide = are_instruction_operands_16bit(inst);
+        u16 src_value = read_src_value(mem, cpu, &inst->src, wide);
+        write_reg_or_mem_value(mem, cpu, &inst->dest, src_value, wide);
         break;
     }
     case OP_ADD: {
-        u16 dest_value = read_src_or_mem_value(state, &inst->dest);
-        u16 src_value = read_src_value(state, &inst->src);
+        bool wide = are_instruction_operands_16bit(inst);
+        u16 dest_value = read_reg_or_mem_value(mem, cpu, &inst->dest, wide);
+        u16 src_value = read_src_value(mem, cpu, &inst->src, wide);
         u16 result = dest_value + src_value;
 
-        state->flags.zero = result == 0;
-        if (are_instruction_operands_16bit(inst)) {
-            state->flags.sign = (result >> 15) & 0b1;
-        } else {
-            state->flags.sign = (result >> 7) & 0b1;
-        }
+        cpu->flags.zero = result == 0;
+        update_sign_flag(cpu, inst, result);
 
-        write_src_or_mem_value(state, &inst->dest, result);
+        write_reg_or_mem_value(mem, cpu, &inst->dest, result, wide);
         break;
     }
     case OP_SUB: {
-        u16 dest_value = read_src_or_mem_value(state, &inst->dest);
-        u16 src_value = read_src_value(state, &inst->src);
+        bool wide = are_instruction_operands_16bit(inst);
+        u16 dest_value = read_reg_or_mem_value(mem, cpu, &inst->dest, wide);
+        u16 src_value = read_src_value(mem, cpu, &inst->src, wide);
         u16 result = dest_value - src_value;
 
-        state->flags.zero = result == 0;
-        if (are_instruction_operands_16bit(inst)) {
-            state->flags.sign = (result >> 15) & 0b1;
-        } else {
-            state->flags.sign = (result >> 7) & 0b1;
-        }
+        cpu->flags.zero = result == 0;
+        update_sign_flag(cpu, inst, result);
 
-        write_src_or_mem_value(state, &inst->dest, result);
+        write_reg_or_mem_value(mem, cpu, &inst->dest, result, wide);
         break;
     }
     case OP_CMP: {
-        u16 dest_value = read_src_or_mem_value(state, &inst->dest);
-        u16 src_value = read_src_value(state, &inst->src);
+        bool wide = are_instruction_operands_16bit(inst);
+        u16 dest_value = read_reg_or_mem_value(mem, cpu, &inst->dest, wide);
+        u16 src_value = read_src_value(mem, cpu, &inst->src, wide);
         u16 result = dest_value - src_value;
 
-        state->flags.zero = result == 0;
-        if (are_instruction_operands_16bit(inst)) {
-            state->flags.sign = (result >> 15) & 0b1;
-        } else {
-            state->flags.sign = (result >> 7) & 0b1;
-        }
+        cpu->flags.zero = result == 0;
+        update_sign_flag(cpu, inst, result);
         break;
     }
     case OP_JNE: {
-        if (!state->flags.zero) {
-            i8 jmp_offset = inst->jmp_offset;
-            state->ip += jmp_offset;
+        if (!cpu->flags.zero) {
+            cpu->ip += inst->jmp_offset;
         }
 
         break;

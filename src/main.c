@@ -113,9 +113,8 @@ int dissassemble(FILE *src, FILE *dst) {
     return 0;
 }
 
-int simulate(FILE *src) {
-	struct memory mem = { 0 };
-	int byte_count = load_mem_from_stream(&mem, src, 0);
+int simulate(FILE *src, struct memory *mem) {
+	int byte_count = load_mem_from_stream(mem, src, 0);
 	if (byte_count == -1) {
 		fprintf(stderr, "ERROR: Failed to load file to memory\n");
 		return -1;
@@ -124,13 +123,13 @@ int simulate(FILE *src) {
 	struct cpu_state state = { 0 };
     struct instruction inst;
     while (state.ip < byte_count) {
-        enum decode_error err = decode_instruction(&mem, &state.ip, &inst);
+        enum decode_error err = decode_instruction(mem, &state.ip, &inst);
         if (err == DECODE_ERR_EOF) break;
         if (err != DECODE_OK) {
             fprintf(stderr, "ERROR: Failed to decode instruction at 0x%08x: %s\n", state.ip, decode_error_to_str(err));
             return -1;
         }
-		execute_instruction(&mem, &state, &inst);
+		execute_instruction(mem, &state, &inst);
     }
 
 	printf("Final registers:\n");
@@ -148,7 +147,11 @@ int simulate(FILE *src) {
 }
 
 void print_usage(const char *program) {
-	fprintf(stderr, "Usage: %s <test-dump|dump|sim> <file>\n", program);
+	fprintf(stderr, "Usage: %s <test-dump|dump|sim|sim-dump> ...\n", program);
+	fprintf(stderr, "\ttest-dump <file.asm> - disassemble and test output\n");
+	fprintf(stderr, "\tdump <file> - disassemble\n");
+	fprintf(stderr, "\tsim <file> - simulate program\n");
+	fprintf(stderr, "\tsim-dump <file> <output> - simulate program and dump memory to file\n");
 }
 
 int test_decoder(const char *asm_file) {
@@ -226,7 +229,7 @@ int dump_decompilation(const char *input) {
 	return 0;
 }
 
-int run_simulation(const char *input) {
+int run_simulation_with_memory(const char *input, struct memory *mem) {
 	if (strendswith(input, ".asm")) {
 		char bin_filename[MAX_PATH_SIZE];
 		get_tmp_file(bin_filename, "nasm_output");
@@ -242,7 +245,7 @@ int run_simulation(const char *input) {
 			remove(bin_filename);
 			return -1;
 		}
-		simulate(assembly);
+		simulate(assembly, mem);
 		fclose(assembly);
 
 		remove(bin_filename);
@@ -252,27 +255,54 @@ int run_simulation(const char *input) {
 			printf("ERROR: Opening file '%s': %d\n", input, errno);
 			return -1;
 		}
-		simulate(assembly);
+		simulate(assembly, mem);
 		fclose(assembly);
 	}
 
 	return 0;
 }
 
+int run_simulation(const char *input) {
+	struct memory mem = { 0 };
+	return run_simulation_with_memory(input, &mem);
+}
+
+int run_simulation_and_dump(const char *input, char const *output) {
+	struct memory mem = { 0 };
+	int rc = run_simulation_with_memory(input, &mem);
+	if (rc) return rc;
+
+	FILE *output_file = fopen(output, "wb");
+	if (output_file == NULL) {
+		return -1;
+	}
+
+	int written = fwrite(mem.mem, sizeof(u8), MEMORY_SIZE, output_file);
+	if (written != MEMORY_SIZE) {
+		fclose(output_file);
+		return -1;
+	}
+
+	return fclose(output_file);
+}
+
 int main(int argc, char **argv) {
-	if (argc != 3) {
+	if (argc <= 2) {
 		print_usage(argv[0]);
 		return -1;
 	}
 
-	if (strequal(argv[1], "test-dump")) {
+	if (strequal(argv[1], "test-dump") && argc == 3) {
 		return test_decoder(argv[2]);
 
-	} else if (strequal(argv[1], "dump")) {
+	} else if (strequal(argv[1], "dump") && argc == 3) {
 		return dump_decompilation(argv[2]);
 
-	} else if (strequal(argv[1], "sim")) {
+	} else if (strequal(argv[1], "sim") && argc == 3) {
 		return run_simulation(argv[2]);
+
+	} else if (strequal(argv[1], "sim-dump") && argc == 4) {
+		return run_simulation_and_dump(argv[2], argv[3]);
 
 	} else {
 		print_usage(argv[0]);

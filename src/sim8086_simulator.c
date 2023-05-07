@@ -196,7 +196,14 @@ void execute_instruction(struct cpu_state *state, struct instruction *inst) {
         }
         break;
     }
-    default:
+    case OP_JNE: {
+        if (!state->flags.zero) {
+            i8 jmp_offset = inst->jmp_offset;
+            state->ip += jmp_offset;
+        }
+
+        break;
+    } default:
         todo("Unhandled instruction execution '%s'\n", operation_to_str(inst->op));
     }
 }

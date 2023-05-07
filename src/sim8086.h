@@ -12,7 +12,7 @@
 #define panic(...) fprintf(stderr, "PANIC(%s:%d): ", __FILE__, __LINE__); fprintf(stderr, __VA_ARGS__); abort()
 #define todo(...) fprintf(stderr, "TODO(%s:%d): ", __FILE__, __LINE__); fprintf(stderr, __VA_ARGS__); abort()
 #define ARRAY_LEN(arr) (sizeof(arr) / sizeof(arr[0]))
-#define MEMORY_SIZE (1024 * 1024) // 1 MiB
+#define MEMORY_SIZE 65536 // 2^16
 
 enum operation {
     OP_MOV,
@@ -121,4 +121,6 @@ struct cpu_state {
         bool sign;
         // TODO: Add all flags
     } flags;
+
+    u16 ip;
 };

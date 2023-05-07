@@ -87,7 +87,7 @@ err:
 int dissassemble(FILE *src, FILE *dst) {
     fprintf(dst, "bits 16\n\n");
 
-	struct memory mem = { .mem = { 0xFF } };
+	struct memory mem = { 0 };
 	int byte_count = load_mem_from_stream(&mem, src, 0);
 	if (byte_count == -1) {
 		fprintf(stderr, "ERROR: Failed to load file to memory\n");
@@ -96,7 +96,7 @@ int dissassemble(FILE *src, FILE *dst) {
 
     char buff[256];
     struct instruction inst;
-	u32 inst_address = 0;
+	u16 inst_address = 0;
     while (inst_address < byte_count) {
         enum decode_error err = decode_instruction(&mem, &inst_address, &inst);
         if (err == DECODE_ERR_EOF) break;
@@ -114,7 +114,7 @@ int dissassemble(FILE *src, FILE *dst) {
 }
 
 int simulate(FILE *src) {
-	struct memory mem;
+	struct memory mem = { 0 };
 	int byte_count = load_mem_from_stream(&mem, src, 0);
 	if (byte_count == -1) {
 		fprintf(stderr, "ERROR: Failed to load file to memory\n");
@@ -123,12 +123,11 @@ int simulate(FILE *src) {
 
 	struct cpu_state state = { 0 };
     struct instruction inst;
-    u32 inst_address = 0;
-    while (inst_address < byte_count) {
-        enum decode_error err = decode_instruction(&mem, &inst_address, &inst);
+    while (state.ip < byte_count) {
+        enum decode_error err = decode_instruction(&mem, &state.ip, &inst);
         if (err == DECODE_ERR_EOF) break;
         if (err != DECODE_OK) {
-            fprintf(stderr, "ERROR: Failed to decode instruction at 0x%08x: %s\n", inst_address, decode_error_to_str(err));
+            fprintf(stderr, "ERROR: Failed to decode instruction at 0x%08x: %s\n", state.ip, decode_error_to_str(err));
             return -1;
         }
 		execute_instruction(&state, &inst);
@@ -142,6 +141,7 @@ int simulate(FILE *src) {
 	printf("      bp: 0x%04x (%d)\n", state.bp, state.bp);
 	printf("      si: 0x%04x (%d)\n", state.si, state.si);
 	printf("      di: 0x%04x (%d)\n", state.di, state.di);
+	printf("      ip: 0x%04x (%d)\n", state.ip, state.ip);
 	printf("   flags: %s%s\n", state.flags.sign ? "S" : "", state.flags.zero ? "Z" : "");
 	return 0;
 }

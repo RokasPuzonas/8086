@@ -74,7 +74,7 @@ static enum mem_base decode_mem_base(u8 rm) {
 static void decode_reg_or_mem(
         struct reg_or_mem_value *value,
         struct memory *mem,
-        u32 *addr,
+        u16 *addr,
         u8 rm,
         u8 mod,
         bool wide
@@ -110,7 +110,7 @@ static void decode_reg_or_mem(
 static void deocde_reg_or_mem_to_src(
         struct src_value *value,
         struct memory *mem,
-        u32 *addr,
+        u16 *addr,
         u8 rm,
         u8 mod,
         bool wide
@@ -129,7 +129,7 @@ static void deocde_reg_or_mem_to_src(
 // TODO: change to readinf from a byte buffer
 // TODO: add handling for 'DECODE_ERR_MISSING_BYTES'
 // Handy reference: Table 4-12. 8086 Instruction Encoding
-enum decode_error decode_instruction(struct memory *mem, u32 *addr, struct instruction *output) {
+enum decode_error decode_instruction(struct memory *mem, u16 *addr, struct instruction *output) {
     u8 byte1 = pull_byte_at(mem, addr);
 
     // MOVE: Register memory to/from register

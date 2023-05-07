@@ -25,11 +25,11 @@ int load_mem_from_file(struct memory *mem, const char *filename, u32 start) {
 }
 
 // TODO: Make this error some kind of error, when reading past end
-u8 read_byte_at(struct memory *mem, u32 address) {
+u8 read_byte_at(struct memory *mem, u16 address) {
     return mem->mem[address % MEMORY_SIZE];
 }
 
-u8 pull_byte_at(struct memory *mem, u32 *address) {
+u8 pull_byte_at(struct memory *mem, u16 *address) {
     u8 byte = read_byte_at(mem, *address);
     (*address)++;
     return byte;

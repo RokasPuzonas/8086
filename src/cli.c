@@ -5,12 +5,7 @@
 #include <errno.h>
 
 #include "os.h"
-#include "sim8086.h"
-
-#include "sim8086.c"
-#include "sim8086_memory.c"
-#include "sim8086_decoder.c"
-#include "sim8086_simulator.c"
+#include "sim8086/prelude.h"
 
 // TODO: refactor cli commands, there is a lot of repeating code for reading assemblies and compiling them.
 
@@ -108,8 +103,7 @@ int dissassemble(FILE *src, FILE *dst) {
         }
 
         instruction_to_str(buff, sizeof(buff), &inst);
-        fprintf(dst, buff);
-        fprintf(dst, "\n");
+        fprintf(dst, "%s\b", buff);
     }
 
     return 0;

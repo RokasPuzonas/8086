@@ -8,5 +8,6 @@
         "errno.h": "c",
         "stdbool.h": "c",
         "sim8086.h": "c"
-    }
+    },
+    "liveServer.settings.root": "./build/web"
 }

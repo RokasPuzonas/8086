@@ -1,8 +1,13 @@
-#include <stdio.h>
-
 // TODO: add error codes
 
-int load_mem_from_stream(struct memory *mem, FILE *stream, u32 start) {
+int load_mem_from_buff(struct memory *mem, u8 *buff, u16 buff_size, u16 start)
+{
+    if (start + buff_size > MEMORY_SIZE) return -1;
+    memcpy(mem->mem + start, buff, buff_size);
+    return 0;
+}
+
+int load_mem_from_stream(struct memory *mem, FILE *stream, u16 start) {
     u32 offset = 0;
     while (true) {
         u8 byte = fgetc(stream);
@@ -14,7 +19,7 @@ int load_mem_from_stream(struct memory *mem, FILE *stream, u32 start) {
     return offset;
 }
 
-int load_mem_from_file(struct memory *mem, const char *filename, u32 start) {
+int load_mem_from_file(struct memory *mem, const char *filename, u16 start) {
     FILE *stream = fopen(filename, "rb");
     if (stream == NULL) {
         return -1;

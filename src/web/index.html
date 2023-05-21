@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>sim8086.wasm</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                fontFamily: {
+                    serif: ["Source Sans Pro", "sans-serif"]
+                }
+            }
+        }
+    </script>
+    <style>
+        .register {
+            display: inline-block;
+
+            background: #AAA;
+            display: flex;
+            gap: 0.25rem;
+        }
+        .register__name, .register__value {
+            display: inline-block;
+            background: #BBB;
+        }
+        .register__value {
+            text-align: center;
+            padding: 0.25ch 1ch;
+            flex-grow: 1;
+        }
+        .register__value--byte {
+            width: 8ch;
+        }
+        .register__name {
+            text-align: right;
+            min-width: 4ch
+        }
+    </style>
+</head>
+<body class="h-screen font-serif">
+<main class="bg-red-500 max-w-screen-md m-auto h-full p-5 gap-3 flex flex-col">
+    <h1 class="font-bold text-4xl m-auto text-center grow-0">sim8086.wasm</h1>
+    <div class="flex flex-col min-h-max grow gap-4">
+        <div class="bg-green-500">a</div>
+        <div class="bg-blue-500 grow flex flex-row gap-4">
+            <div class="bg-green-500 grow">
+
+            </div>
+            <div class="bg-green-500 grow flex flex-row basis-1/4">
+                <div class="bg-cyan-500 flex flex-col gap-1">
+                    <register-field reg="ax" has-low-high></register-field>
+                    <register-field reg="bx" has-low-high></register-field>
+                    <register-field reg="cx" has-low-high></register-field>
+                    <register-field reg="dx" has-low-high></register-field>
+                    <register-field reg="sp"></register-field>
+                    <register-field reg="bp"></register-field>
+                    <register-field reg="si"></register-field>
+                    <register-field reg="di"></register-field>
+                    <register-field reg="ip" readonly></register-field>
+                    <register-input reg="ax" position="low"> </register-input>
+                </div>
+                <div class="bg-cyan-500">
+                </div>
+            </div>
+        </div>
+        <div class="bg-green-500 grow basis-1/4"></div>
+    </div>
+</main>
+
+<script src="sim8086.js"></script>
+<script>
+    const registers = {}
+    for (const reg of ["ax", "bx", "cx", "dx", "sp", "bp", "si", "di", "ip"]) {
+        registers[reg] = {
+            set: Module.cwrap(`cpu_set_${reg}`, null, ["number"]),
+            get: Module.cwrap(`cpu_get_${reg}`, "number", [])
+        }
+    }
+
+    class RegisterInputElement extends HTMLInputElement {
+        /** @type {"low"|"high"|"full"} */
+        position = "full"
+        reg = "<unknown>"
+        /** @type {"hex"|"decimal"|"binary"} */
+        format = "decimal"
+        validFormatSymbols = {
+            hex: "0123456789abcdef",
+            decimal: "0123456789",
+            binary: "01"
+        }
+
+        onChange(e) {
+            let parsed = parseInt(this.value, this.validFormatSymbols[this.format].length)
+            if (parsed == NaN) {
+                registers[this.reg].set(0)
+            } else {
+                registers[this.reg].set(parsed)
+            }
+            this.render()
+        }
+
+        onKeyPress(e) {
+            if (!this.validFormatSymbols[this.format].includes(e.key.toLocaleLowerCase())) {
+                e.preventDefault()
+            }
+        }
+
+        connectedCallback() {
+            this.reg = this.getAttribute("reg").toLocaleLowerCase()
+            this.position = this.getAttribute("position")
+            this.classList.add("register__value")
+            if (this.position !== "full") {
+                this.classList.add("register__value--byte")
+            }
+            this.addEventListener("change", this.onChange)
+            this.addEventListener("keypress", this.onKeyPress)
+        }
+        getRegValue() {
+            const value = registers[this.reg].get()
+            switch (this.position) {
+                case "full": return value & 0xFFFF
+                case "low":  return value & 0xFF
+                case "high": return (value >> 8) & 0xFF
+            }
+        }
+
+        render() {
+            const value = this.getRegValue()
+            if (this.format == "hex") {
+                this.value = value.toString(16).padStart(this.position == "full" ? 4 : 2, "0")
+            } else if (this.format == "decimal") {
+                this.value = value
+            } else if (this.format == "binary") {
+                this.value = value.toString(2).padStart(this.position == "full" ? 16 : 8, "0")
+            }
+        }
+    }
+    customElements.define("register-input", RegisterInputElement, { extends: "input" })
+
+    class RegisterElement extends HTMLElement {
+        reg = "<unknown>"
+        readonly = false
+        hasHighLow = false
+
+        /** @type {RegisterInputElement} */
+        valueElement = undefined
+        /** @type {RegisterInputElement} */
+        highByteElement = undefined
+        /** @type {RegisterInputElement} */
+        lowByteElement = undefined
+
+        constructor() {
+            super()
+            this.readonly = this.getAttribute("readonly") !== null
+            this.reg = this.getAttribute("reg").toLocaleLowerCase()
+            this.hasHighLow = this.getAttribute("has-low-high") !== null
+            this.classList.add("register")
+
+            const nameElement = this.appendChild(document.createElement("span"))
+            nameElement.classList.add("register__name")
+            nameElement.innerText = this.reg.toUpperCase()
+
+            if (this.hasHighLow) {
+                const highByteElem = document.createElement("input", { is: "register-input" })
+                highByteElem.setAttribute("reg", this.reg)
+                highByteElem.setAttribute("position", "high")
+                if (this.readonly) highByteElem.setAttribute("readonly", "")
+                this.highByteElement = this.appendChild(highByteElem)
+
+                const lowByteElem = document.createElement("input", { is: "register-input" })
+                lowByteElem.setAttribute("reg", this.reg)
+                lowByteElem.setAttribute("position", "low")
+                if (this.readonly) lowByteElem.setAttribute("readonly", "")
+                this.lowByteElement = this.appendChild(lowByteElem)
+            } else {
+                const elem = document.createElement("input", { is: "register-input" })
+                elem.setAttribute("reg", this.reg)
+                elem.setAttribute("position", "full")
+                if (this.readonly) elem.setAttribute("readonly", "")
+                this.valueElement = this.appendChild(elem)
+            }
+        }
+
+        render() {
+            if (this.hasHighLow) {
+                this.lowByteElement.render()
+                this.highByteElement.render()
+            } else {
+                this.valueElement.render()
+            }
+        }
+    }
+    customElements.define("register-field", RegisterElement)
+
+    const assembly = [137, 217]
+    const decodeInstructionAtIP = Module.cwrap("decode_inst_at_ip", "number", [])
+    const loadAsmToMemory = Module.cwrap("load_to_memory_state", null, ["array", "number", "number"])
+    const getInstructionString = Module.cwrap("get_inst_str", null, ["number", "number"])
+
+    Module.onRuntimeInitialized = () => {
+        loadAsmToMemory(assembly, assembly.length, 0)
+        console.log(decodeInstructionAtIP())
+        console.log(getCurrentInstruction())
+
+        for (const elem of document.getElementsByTagName("register-field")) {
+            elem.render()
+        }
+    }
+
+    function getCurrentInstruction() {
+        const inst = Module._malloc(64)
+        getInstructionString(inst, 64)
+        const text = Module.AsciiToString(inst)
+        Module._free(inst)
+        return text
+    }
+</script>
+</body>
+</html>

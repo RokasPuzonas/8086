@@ -1,4 +1,4 @@
-main.exe
+build
 test-dump-asm.o
 test-dump.asm
 test-input.o

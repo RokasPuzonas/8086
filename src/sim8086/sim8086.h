@@ -1,6 +1,8 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <string.h>
+#include <stdio.h>
 
 #define u32 uint32_t
 #define i32 int32_t
@@ -9,8 +11,20 @@
 #define u8  uint8_t
 #define i8  int8_t
 
+#ifdef SIM8086_EMCC
+#define panic(...) \
+    emscripten_log(EM_LOG_ERROR, "PANIC(%s:%d): ", __FILE__, __LINE__); \
+    emscripten_log(EM_LOG_ERROR, __VA_ARGS__); \
+    abort()
+#define todo(...) \
+    emscripten_log(EM_LOG_WARN, "TODO(%s:%d): ", __FILE__, __LINE__); \
+    emscripten_log(EM_LOG_WARN, __VA_ARGS__); \
+    abort()
+#else
 #define panic(...) fprintf(stderr, "PANIC(%s:%d): ", __FILE__, __LINE__); fprintf(stderr, __VA_ARGS__); abort()
 #define todo(...) fprintf(stderr, "TODO(%s:%d): ", __FILE__, __LINE__); fprintf(stderr, __VA_ARGS__); abort()
+#endif
+
 #define ARRAY_LEN(arr) (sizeof(arr) / sizeof(arr[0]))
 #define MEMORY_SIZE 65536 // 2^16
 

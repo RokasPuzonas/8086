@@ -1,4 +1,5 @@
 #include <emscripten.h>
+#include <emscripten/emscripten.h>
 
 #define SIM8086_EMCC
 #include "sim8086/prelude.h"
@@ -8,29 +9,44 @@
 
 EXPORT struct memory memory_state;
 EXPORT struct cpu_state cpu_state;
-EXPORT struct instruction current_instruction;
+
+EXPORT void step() {
+    struct instruction inst;
+	enum decode_error err = decode_instruction(&memory_state, &cpu_state.ip, &inst);
+	if (err == DECODE_OK) {
+		execute_instruction(&memory_state, &cpu_state, &inst);
+	}
+}
+
+EXPORT void reset_cpu() {
+	memset(&cpu_state, 0, sizeof(cpu_state));
+}
 
 /* -------------------- Decoder ----------------------- */
 
-EXPORT int decode_inst_at_ip() {
-    return decode_instruction(&memory_state, &cpu_state.ip, &current_instruction);
-}
-
-EXPORT void get_inst_str(char *buff, size_t buff_size) {
-    instruction_to_str(buff, buff_size, &current_instruction);
+EXPORT u16 decode_inst_at(u16 addr, char *buff, size_t buff_size) {
+	struct instruction inst;
+	u16 after_addr = addr;
+	enum decode_error err = decode_instruction(&memory_state, &after_addr, &inst);
+	if (err == DECODE_OK) {
+		instruction_to_str(buff, buff_size, &inst);
+		return after_addr - addr;
+	} else {
+		return 0;
+	}
 }
 
 /* -------------------- Memory ----------------------- */
 
-EXPORT int load_to_memory_state(u8 *assembly, u16 assembly_size, u16 start) {
-    return load_mem_from_buff(&memory_state, assembly, assembly_size, start);
+EXPORT int set_memory_state(u8 *buffer, u16 buffer_size, u16 start) {
+    return load_mem_from_buff(&memory_state, buffer, buffer_size, start);
 }
 
 EXPORT u8 *get_memory_state_base() {
     return memory_state.mem;
 }
 
-EXPORT size_t get_memory_state_size(u8 *assembly, u16 assembly_size, u16 start) {
+EXPORT size_t get_memory_state_size() {
     return MEMORY_SIZE;
 }
 
